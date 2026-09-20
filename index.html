@@ -23,9 +23,9 @@
 </style>
 </head>
 <body>
-<div id="brand">13.52 KIRMA SAYFASI (GOLHEN İLE)</div>
+<div id="brand">13.52 KIRMA SAYFASI (GOLHEN)</div>
 <div id="wrap">
-  <div id="state">detecting firmware...</div>
+  <div id="state">Yazılım sürümü denetleniyor...</div>
   <div id="det"></div>
   <div id="cache"></div>
 </div>
@@ -38,12 +38,6 @@
     function setState(t, c) { stateEl.textContent = t; stateEl.className = c || ""; }
     function setCache(t, ok) { cacheEl.textContent = t; cacheEl.className = ok ? "cacheok" : ""; }
     var params = new URLSearchParams(location.search);
-
-    // Firmwares this build has a MEASURED kernel table for. jb.js still runs its
-    // own kernel-table-present gate, so this is UX only -- an unlisted firmware
-    // can still be launched with a tap. KEEP IN SYNC with ps4_offsets.js: add a
-    // fwnum here in the SAME commit that fills that firmware's kernel RVAs.
-    // The PS4 reports its minor as two hex digits in the UA (13.52 -> minor 0x52).
     var SUPPORTED = { 1302: 1, 1304: 1, 1350: 1, 1352: 1 }; // all measured on hardware
 
     var key = null, fwnum = null;
@@ -79,7 +73,7 @@
     // it, so a user-agent quirk on the real 13.52 console can never lock it out.
     if (!supported) {
         setState("UNSUPPORTED FIRMWARE", "bad");
-        waitForTap("UNSUPPORTED (" + (key || "unknown") + ") -- press X or tap to run anyway", go);
+        waitForTap("DESTEKLENMEYEN SÜRÜM (" + (key || "unknown") + ") -- Yine de çalıştırmak için X'e basın.", go);
         return;
     }
 
@@ -95,37 +89,37 @@
     } else if (ac.status === ac.UPDATEREADY) {
         try { ac.swapCache(); } catch (e) {}
         setCache("update downloaded", true);
-        waitForTap("UPDATE READY -- press X or tap to reload & run",
+        waitForTap("GÜNCELLEME HAZIR -- yeniden yükleyip çalıştırmak için X'e basın veya dokunun",
                    function () { location.reload(); });
     } else {
         setCache("checking cache...");
         ac.addEventListener("downloading",
-            function () { setCache("caching for offline (first run)..."); }, false);
+            function () { setCache("Çevrimdışı kullanım için önbelleğe alma (ilk çalıştırma)..."); }, false);
         ac.addEventListener("progress", function (e) {
             if (e && e.total)
                 setCache("caching " + Math.round((e.loaded / e.total) * 100) + "%");
         }, false);
         ac.addEventListener("cached", function () {
             setCache("cached for offline use", true);
-            waitForTap("CACHED (first run) -- press X or tap to run", go);
+            waitForTap("SAYFA ÖN BELLEĞE ALINDI. (ilk çalıştırma) -- X tuşuna basıp Jailbreaki çalıştırabilirsiniz.", go);
         }, false);
         ac.addEventListener("updateready", function () {
             try { ac.swapCache(); } catch (e) {}
             setCache("update downloaded", true);
-            waitForTap("UPDATE READY -- press X or tap to reload & run",
+            waitForTap("GÜNCELLEME HAZIR -- X tuşuna basıp sayfayı tazeleyip çalıştırabilirsiniz.",
                        function () { location.reload(); });
         }, false);
         ac.addEventListener("noupdate", function () {
-            setCache("cached -- offline ready", true);
+            setCache("Sayfa ön belleğe alındı -- çevrimdışı çalıştırma hazır.", true);
             go();
         }, false);
         ac.addEventListener("error", function () {
             setCache("cache unavailable");
-            waitForTap("CACHE FAILED -- press X or tap to run anyway", go);
+            waitForTap("Sayfa ön belleğe alınamadı! -- Jailbreak'i yine de çalıştırmak isterseniz X tuşuna basın.", go);
         }, false);
         ac.addEventListener("obsolete", function () {
             setCache("cache obsolete");
-            waitForTap("CACHE OBSOLETE -- press X or tap to run", go);
+            waitForTap("Önbellek güncel değil; çalıştırmak için X'e basın veya dokunun.", go);
         }, false);
     }
 })();
