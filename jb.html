@@ -135,7 +135,7 @@
         border-top-color: #258dff;
         border-right-color: #884cff;
         border-radius: 50%;
-        animation: spin 0.85s linear infinite;
+        animation: spin 0.9s linear infinite;
         box-shadow: 0 0 35px rgba(37, 141, 255, 0.12);
       }
       #spin:after {
@@ -146,9 +146,7 @@
         background: #15243b;
       }
       @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
+        to { transform: rotate(360deg); }
       }
       .main-title {
         font-size: 28px;
@@ -185,8 +183,16 @@
         font-weight: 700;
         line-height: 1.5;
       }
-      #msg { color: #ff7c87; }
+      #msg { color: #ff7c87; font-size: 22px; }
       #success { color: #55d998; font-size: 24px; }
+      .result-line { font-size: inherit; font-weight: inherit; }
+      .failure-note {
+        display: block;
+        margin-top: 18px;
+        color: #b8c8de;
+        font-size: 13px;
+        font-weight: 400;
+      }
       #wrap {
         padding: 0;
       }
@@ -303,22 +309,18 @@
         <section class="card">
           <div class="tag">PLAYSTATION 4</div>
           <div id="spin"></div>
-          <div class="main-title">Jailbreak hazırlanıyor...</div>
+          <div class="main-title">Jailbreak denemesi yapılıyor...</div>
           <div class="hint">
             Lütfen bekleyin ve bu sırada sayfayı kapatmayın.
           </div>
           <div class="steps"><i></i><i></i><i></i><i></i></div>
           <div id="success">
-            İŞLEM TAMAMLANDI!<br /><span
-              style="font-size: 16px; font-weight: 400; color: #b8c8de"
-              >Artık tarayıcıdan çıkabilirsiniz.</span
-            >
+            <span class="result-line">JAILBREAK YAPILDI!</span><br />
+            <span class="result-line">ARTIK TARAYICIDAN ÇIKABİLİRSİNİZ</span>
           </div>
           <div id="msg">
-            İŞLEM BAŞARISIZ<br /><span
-              style="font-size: 14px; font-weight: 400; color: #9badc7"
-              >Cihazı yeniden başlatıp tekrar deneyin.</span
-            >
+            JAILBREAK YAPILAMADI!<br />CİHAZI YENİDEN BAŞLATIP TEKRAR DENEYİN..
+            <span class="failure-note">Not: Cihazı yeniden başlatmadan kesinlikle tekrar bir deneme yapmayın..</span>
           </div>
           <div id="wrap">
             <div id="state"></div>
@@ -331,7 +333,7 @@
       </footer>
     </div>
     <script type="module">
-      import "./jb.js?v=12";
+      import "./jb.js?v=20";
     </script>
   </body>
 </html>
