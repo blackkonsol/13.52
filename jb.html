@@ -394,11 +394,14 @@
         document.body.className = ok ? "done" : "fail";
       }
 
+      let attemptStarted = false;
       startButton.addEventListener("click", async () => {
+        if (attemptStarted) return;
+        attemptStarted = true;
         setRunningUI();
 
         try {
-          await import("./jb.js?v=20");
+          await import("./jb.js?v=21");
         } catch (e) {
           console.error(e);
           setResultUI(false);

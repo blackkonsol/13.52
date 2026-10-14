@@ -49,7 +49,15 @@ function terse(s) {
 
 const SHOW_LOG = params.get("log") === "1";
 if (SHOW_LOG && document.body) document.body.className = "log";
+let alreadyActive = false;
 function finishUI(ok) {
+  if (alreadyActive) {
+    const result = document.getElementById("success");
+    if (result) result.textContent = "Jailbreak zaten aktif";
+    if (document.body) document.body.className = "done";
+    state("Jailbreak zaten aktif", "ok");
+    return;
+  }
   if (SHOW_LOG || !document.body) return;
   document.body.className = ok ? "done" : "fail";
 }
@@ -536,6 +544,16 @@ let allDone = false,
       pid > 0,
       "pid=" + pid + " uid=" + sc(SYS.getuid).i32,
     );
+
+    // Read live process credentials before workers, socket spraying or kernel writes.
+    // Root credentials disappear after a full reboot; no browser storage is used.
+    const currentUid = sc(SYS.getuid).i32;
+    if (currentUid < 0) throw new Error("Jailbreak durumu okunamadı");
+    if (currentUid === 0) {
+      alreadyActive = true;
+      mark("ALREADY-ACTIVE", "Jailbreak zaten aktif; kernel attempt skipped");
+      return; // finally restores the temporary browser call pivot and shows the result.
+    }
 
     const scratchAb = new ArrayBuffer(0x1000);
     keepAlive.push(scratchAb);
