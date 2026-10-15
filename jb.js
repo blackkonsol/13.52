@@ -52,6 +52,18 @@ if (SHOW_LOG && document.body) document.body.className = "log";
 function finishUI(ok) {
   if (SHOW_LOG || !document.body) return;
   document.body.className = ok ? "done" : "fail";
+  try {
+    const spin = document.getElementById("spin");
+    const title = document.querySelector(".main-title");
+    const hint = document.querySelector(".hint");
+    const steps = document.querySelector(".steps");
+    const button = document.getElementById("startJb");
+    if (spin) spin.style.display = "none";
+    if (title) title.style.display = "none";
+    if (hint) hint.style.display = "none";
+    if (steps) steps.style.display = "none";
+    if (button) button.style.display = "none";
+  } catch (e) {}
 }
 function mark(tag, detail) {
   const raw = detail;
