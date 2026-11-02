@@ -5,7 +5,7 @@ import {
   fakeCellReleased,
   carrierHeaderCopy,
   carrierHomeVector,
-} from "./core.js?v=28";
+} from "./core.js?v=10";
 
 let carrier = null;
 
