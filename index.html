@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="tr" manifest="cache.appcache">
+<html lang="tr">
   <head>
     <meta charset="utf-8" />
     <meta
       name="viewport"
       content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
     />
-    <title>Black Konsol</title>
+    <title>Black Konsol | Jailbreak</title>
     <style>
       * {
         box-sizing: border-box;
@@ -28,20 +28,20 @@
         content: "";
         position: fixed;
         border-radius: 50%;
-        opacity: 0.34;
+        opacity: 0.32;
       }
       body:before {
-        width: 440px;
-        height: 440px;
+        width: 430px;
+        height: 430px;
         left: -190px;
         top: -230px;
         background: #006eff;
         box-shadow: 0 0 100px #006eff;
       }
       body:after {
-        width: 360px;
-        height: 360px;
-        right: -180px;
+        width: 350px;
+        height: 350px;
+        right: -170px;
         bottom: -210px;
         background: #7b20ff;
         box-shadow: 0 0 100px #7b20ff;
@@ -62,7 +62,7 @@
         display: flex;
         flex-direction: column;
       }
-      header {
+      #brand {
         height: 74px;
         padding: 0 38px;
         display: flex;
@@ -98,7 +98,7 @@
         letter-spacing: 0.08em;
         background: #0c1422;
       }
-      main {
+      .stage {
         flex: 1;
         display: flex;
         align-items: center;
@@ -106,67 +106,208 @@
         padding: 28px;
       }
       .card {
-        width: 700px;
+        width: 670px;
         max-width: 94vw;
-        padding: 42px 46px 35px;
+        padding: 44px;
         text-align: center;
         background: rgba(10, 15, 27, 0.94);
         border: 1px solid #253653;
         border-radius: 24px;
-        box-shadow:
-          0 24px 80px rgba(0, 0, 0, 0.5),
-          inset 0 1px rgba(255, 255, 255, 0.04);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
       }
-      h1 {
-        margin: 0 0 28px;
-        font-size: 30px;
-      }
-      #state {
-        min-height: 29px;
-        font-size: 20px;
+      .tag {
+        display: inline-block;
+        padding: 8px 14px;
+        margin-bottom: 24px;
+        border-radius: 8px;
+        background: #101d33;
+        color: #60acff;
+        font-size: 12px;
         font-weight: 700;
+        letter-spacing: 0.12em;
       }
-      #det {
+      #spin {
+        display: none;
+        position: relative;
+        width: 76px;
+        height: 76px;
+        margin: 0 auto 25px;
+        border: 5px solid #17263d;
+        border-top-color: #258dff;
+        border-right-color: #884cff;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+        box-shadow: 0 0 35px rgba(37, 141, 255, 0.12);
+      }
+      #spin:after {
+        content: "";
+        position: absolute;
+        inset: 15px;
+        border-radius: 50%;
+        background: #15243b;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      #startJb {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 220px;
+        min-height: 70px;
+        padding: 16px 34px;
+        border: 0;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #258dff, #884cff);
+        color: #fff;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        margin: 0 auto;
+        box-shadow: 0 12px 35px rgba(37, 141, 255, 0.25);
+        transition: transform 0.15s ease, filter 0.15s ease;
+      }
+      #startJb:hover {
+        filter: brightness(1.1);
+        transform: translateY(-2px);
+      }
+      #startJb:active {
+        transform: translateY(0);
+      }
+      #startJb:disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+      .main-title {
+        display: none;
+        font-size: 28px;
+        font-weight: 750;
+        margin-bottom: 10px;
+      }
+      .hint {
+        display: none;
+        color: #8294b0;
+        font-size: 14px;
+      }
+      .steps {
+        display: none;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 30px;
+      }
+      .steps i {
+        width: 38px;
+        height: 4px;
+        border-radius: 3px;
+        background: #1e304b;
+      }
+      .steps i:first-child {
+        background: #278cff;
+      }
+      .steps i:nth-child(2) {
+        background: #504fcc;
+      }
+      #msg,
+      #success {
+        display: none;
         margin-top: 12px;
-        color: #7486a1;
         font-size: 18px;
-        font-weight: 600;
+        font-weight: 700;
+        line-height: 1.5;
       }
-      #det b {
-        color: #a9c9f6;
+      #msg { color: #ff7c87; font-size: 22px; }
+      #success { color: #55d998; font-size: 24px; }
+      .result-line { font-size: inherit; font-weight: inherit; }
+      .failure-note {
+        display: block;
+        margin-top: 18px;
+        color: #b8c8de;
+        font-size: 13px;
+        font-weight: 400;
       }
-      #cache {
-        min-height: 20px;
-        margin-top: 20px;
-        color: #6b7d98;
-        font-size: 17px;
-        font-weight: 600;
+      #wrap {
+        padding: 0;
       }
-      #cache.cacheok,
-      .ok {
+      #state,
+      #out {
+        display: none;
+      }
+      body.done #spin,
+      body.fail #spin {
+        display: none !important;
+      }
+      body.done #startJb,
+      body.fail #startJb {
+        display: none !important;
+      }
+      body.fail #msg {
+        display: block;
+      }
+      body.done #success {
+        display: block;
+      }
+      body.done .main-title,
+      body.done .hint,
+      body.done .steps,
+      body.fail .main-title,
+      body.fail .hint,
+      body.fail .steps {
+        display: none;
+      }
+      body.log {
+        overflow: auto;
+      }
+      body.log .stage {
+        display: block;
+        padding: 20px 28px;
+      }
+      body.log .card {
+        width: auto;
+        max-width: none;
+        padding: 24px;
+        text-align: left;
+      }
+      body.log #spin,
+      body.log #msg,
+      body.log .main-title,
+      body.log .hint,
+      body.log .steps,
+      body.log .tag {
+        display: none;
+      }
+      body.log #state {
+        display: block;
+        font-size: 22px;
+        font-weight: 700;
+        margin: 0 0 12px;
+      }
+      body.log #out {
+        display: block;
+        white-space: pre-wrap;
+        font:
+          12px/1.5 Consolas,
+          monospace;
+        background: #080d17;
+        border: 1px solid #233553;
+        border-radius: 10px;
+        padding: 15px;
+        height: calc(100vh - 170px);
+        overflow-y: auto;
+      }
+      .ok,
+      .safe {
         color: #55d998;
       }
-      .bad {
-        color: #ff6d7a !important;
+      .bad,
+      .danger {
+        color: #ff6d7a;
       }
       .warn {
-        color: #ffc45c !important;
+        color: #ffc45c;
       }
-      .versions {
-        margin-top: 29px;
-        padding-top: 22px;
-        border-top: 1px solid #1d2a40;
-        display: flex;
-        justify-content: center;
-        gap: 9px;
-      }
-      .versions span {
-        padding: 7px 11px;
-        border: 1px solid #263957;
-        border-radius: 7px;
-        color: #8ca5c8;
-        background: #0b1320;
-        font-size: 12px;
+      code {
+        color: #9fc5fa;
       }
       footer {
         padding: 17px;
@@ -176,20 +317,17 @@
         letter-spacing: 0.08em;
       }
       @media (max-width: 600px) {
-        header {
+        #brand {
           padding: 0 18px;
         }
         .badge {
           display: none;
         }
         .card {
-          padding: 32px 20px;
+          padding: 34px 20px;
         }
-        h1 {
-          font-size: 24px;
-        }
-        .versions {
-          flex-wrap: wrap;
+        .main-title {
+          font-size: 23px;
         }
       }
     </style>
@@ -197,166 +335,96 @@
   <body>
     <div class="grid"></div>
     <div class="shell">
-      <header>
+      <div id="brand">
         <div class="logo">
           <img class="brand-logo" src="black-konsol-logo.png" alt="Black Konsol" />
           <strong>BLACK <span>KONSOL</span></strong>
         </div>
-        <div class="badge">This is a PS4 Jailbreak Page with AIO Fix patch applied.</div>
-      </header>
-      <main>
+        <div class="badge">PS4 14.00 • GoldHEN</div>
+      </div>
+      <main class="stage">
         <section class="card">
-          <h1>PS4 Jailbreak Sayfası</h1>
-          <div id="state">Yazılım sürümü denetleniyor...</div>
-          <div id="det"></div>
-          <div id="cache"></div>
-          <div class="versions">
-            <span>13.02</span><span>13.04</span><span>13.50</span
-            ><span>13.52</span>
+          <button id="startJb" type="button">TIKLA</button>
+          <div id="spin"></div>
+          <div class="main-title">Jailbreak denemesi yapılıyor...</div>
+          <div class="hint">
+            Lütfen bekleyin ve bu sırada sayfayı kapatmayın.
+          </div>
+          <div class="steps"><i></i><i></i><i></i><i></i></div>
+          <div id="success">
+            <span class="result-line">JAILBREAK YAPILDI!</span><br />
+            <span class="result-line">ARTIK TARAYICIDAN ÇIKABİLİRSİNİZ</span>
+          </div>
+          <div id="msg">
+            JAILBREAK YAPILAMADI!<br />CİHAZI YENİDEN BAŞLATIP TEKRAR DENEYİN..
+            <span class="failure-note">Not: Cihazı yeniden başlatmadan kesinlikle tekrar bir deneme yapmayın..</span>
+          </div>
+          <div id="wrap">
+            <div id="state"></div>
+            <div id="out"></div>
           </div>
         </section>
       </main>
       <footer>
-        BLACK KONSOL TEKNİK SERVİS • GÜVENLİ VE HIZLI PS4 ÇÖZÜMLERİ
+        BLACK KONSOL TEKNİK SERVİS • PS4 14.00
       </footer>
     </div>
-    <script>
-      (function () {
-        var stateEl = document.getElementById("state"),
-          detEl = document.getElementById("det"),
-          cacheEl = document.getElementById("cache");
-        function setState(t, c) {
-          stateEl.textContent = t;
-          stateEl.className = c || "";
+    <script type="module">
+      const startButton = document.getElementById("startJb");
+      const spinner = document.getElementById("spin");
+      const title = document.querySelector(".main-title");
+      const hint = document.querySelector(".hint");
+      const steps = document.querySelector(".steps");
+
+      function setRunningUI() {
+        startButton.disabled = true;
+        startButton.style.display = "none";
+        spinner.style.display = "block";
+        title.style.display = "block";
+        hint.style.display = "block";
+        steps.style.display = "flex";
+      }
+
+      function setResultUI(ok) {
+        spinner.style.display = "none";
+        title.style.display = "none";
+        hint.style.display = "none";
+        steps.style.display = "none";
+        startButton.style.display = "none";
+        document.body.className = ok ? "done" : "fail";
+      }
+
+      startButton.addEventListener("click", async () => {
+        if (startButton.disabled) return;
+        setRunningUI();
+
+        try {
+          location.replace("jb.html?log=0&mem=1&slots=9100000&drain=12&hx1400=1&kv=1&fam=0&telemetry=0&stage3=1&stage4=1&stage5=1&stage6=1&stage7=1&stage8=1&stage9=1&stage10=1&goldhen=1&start=1&v=black1400-ui2");
+        } catch (e) {
+          console.error(e);
+          setResultUI(false);
         }
-        function setCache(t, ok) {
-          cacheEl.textContent = t;
-          cacheEl.className = ok ? "cacheok" : "";
+      });
+
+      // jb.js calls finishUI() internally. Override it through the DOM state
+      // as a safety net so the running message/spinner can never remain on
+      // the final success screen.
+      const observer = new MutationObserver(() => {
+        if (document.body.classList.contains("done")) {
+          spinner.style.display = "none";
+          title.style.display = "none";
+          hint.style.display = "none";
+          steps.style.display = "none";
+          startButton.style.display = "none";
+        } else if (document.body.classList.contains("fail")) {
+          spinner.style.display = "none";
+          title.style.display = "none";
+          hint.style.display = "none";
+          steps.style.display = "none";
+          startButton.style.display = "none";
         }
-        var params = new URLSearchParams(location.search),
-          SUPPORTED = { 1302: 1, 1304: 1, 1350: 1, 1352: 1 },
-          key = null,
-          fwnum = null,
-          m = /PlayStation\s+4[\/ ](\d+)\.(\d+)/.exec(navigator.userAgent);
-        if (m) {
-          var ms = parseInt(m[2], 16).toString(16);
-          if (ms.length < 2) ms = "0" + ms;
-          key = m[1] + "." + ms;
-          fwnum = parseInt(m[1], 10) * 100 + parseInt(ms, 10);
-        }
-        var forced = params.get("force") === "1",
-          supported = forced || (fwnum !== null && SUPPORTED[fwnum] === 1);
-        detEl.innerHTML =
-          "Yazılım: <b>" +
-          (key || "algılanamadı") +
-          "</b>" +
-          (supported
-            ? " &nbsp;•&nbsp; <b>uyumlu</b>"
-            : " &nbsp;•&nbsp; bu sürüm destek listesinde değil");
-        var target = "jb.html" + location.search;
-        function go() {
-          setState("Jailbreak başlatılıyor...", "warn");
-          location.replace(target);
-        }
-        function waitForTap(msg, action) {
-          setState(msg, "warn");
-          function fire() {
-            window.removeEventListener("click", fire);
-            window.removeEventListener("keydown", fire);
-            action();
-          }
-          window.addEventListener("click", fire);
-          window.addEventListener("keydown", fire);
-        }
-        if (!supported) {
-          setState("DESTEKLENMEYEN SÜRÜM", "bad");
-          waitForTap("Yine de çalıştırmak için X tuşuna basın.", go);
-          return;
-        }
-        var ac = window.applicationCache;
-        if (!ac || !document.documentElement.hasAttribute("manifest")) {
-          go();
-        } else if (!navigator.onLine) {
-          setCache("Çevrimdışı önbellekten çalıştırılıyor.", true);
-          go();
-        } else if (ac.status === ac.IDLE) {
-          setCache("Çevrimdışı kullanım hazır.", true);
-          go();
-        } else if (ac.status === ac.UPDATEREADY) {
-          try {
-            ac.swapCache();
-          } catch (e) {}
-          setCache("Güncelleme indirildi.", true);
-          waitForTap("Yenileyip çalıştırmak için X tuşuna basın.", function () {
-            location.reload();
-          });
-        } else {
-          setCache("Önbellek kontrol ediliyor...");
-          ac.addEventListener(
-            "downloading",
-            function () {
-              setCache("İlk kullanım için çevrimdışı dosyalar hazırlanıyor...");
-            },
-            false,
-          );
-          ac.addEventListener(
-            "progress",
-            function (e) {
-              if (e && e.total)
-                setCache(
-                  "Hazırlanıyor: %" + Math.round((e.loaded / e.total) * 100),
-                );
-            },
-            false,
-          );
-          ac.addEventListener(
-            "cached",
-            function () {
-              setCache("Çevrimdışı kullanım hazır.", true);
-              waitForTap("Devam etmek için X tuşuna basın.", go);
-            },
-            false,
-          );
-          ac.addEventListener(
-            "updateready",
-            function () {
-              try {
-                ac.swapCache();
-              } catch (e) {}
-              setCache("Güncelleme hazır.", true);
-              waitForTap("Sayfayı yenilemek için X tuşuna basın.", function () {
-                location.reload();
-              });
-            },
-            false,
-          );
-          ac.addEventListener(
-            "noupdate",
-            function () {
-              setCache("Çevrimdışı kullanım hazır.", true);
-              go();
-            },
-            false,
-          );
-          ac.addEventListener(
-            "error",
-            function () {
-              setCache("Önbellek hazırlanamadı.");
-              waitForTap("Yine de çalıştırmak için X tuşuna basın.", go);
-            },
-            false,
-          );
-          ac.addEventListener(
-            "obsolete",
-            function () {
-              setCache("Önbellek güncel değil.");
-              waitForTap("Devam etmek için X tuşuna basın.", go);
-            },
-            false,
-          );
-        }
-      })();
+      });
+      observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     </script>
   </body>
 </html>
-

